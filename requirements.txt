@@ -1,0 +1,18 @@
+# --- Telemetry collector ---
+flask>=3.0
+psutil>=6.0
+
+# --- Traffic simulation ---
+locust>=2.20
+
+# --- Feature engineering / model training ---
+pandas>=2.2
+numpy>=1.26
+scikit-learn>=1.4
+joblib>=1.4
+
+# --- Dashboard ---
+matplotlib>=3.8
+
+# --- Inference service (if it makes its own HTTP calls to the collector) ---
+requests>=2.31
