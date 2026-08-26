@@ -85,43 +85,57 @@ def _log_phase_transition(phase_name: str, cycle: int, target_users: int, elapse
 _current_load_range = {"min": 2, "max": 4}
 
 
-class TrafficStagesShape(LoadTestShape):
-    """
-    Drives automated traffic stages when not in MANUAL mode.
-    """
-    def __init__(self):
-        super().__init__()
-        self._last_logged_key = None
+if not IS_MANUAL_MODE:
 
-    def tick(self):
-        if IS_MANUAL_MODE:
-            # Disable shape logic in manual mode so Locust Web UI inputs work directly
+    class TrafficStagesShape(LoadTestShape):
+        """
+        Drives automated traffic stages.
+        This class only exists when NOT in manual mode.
+        """
+
+        def __init__(self):
+            super().__init__()
+            self._last_logged_key = None
+
+        def tick(self):
+            run_time = self.get_run_time()
+            total_duration = CYCLE_DURATION * CYCLES
+
+            if run_time >= total_duration:
+                return None
+
+            cycle_index = int(run_time // CYCLE_DURATION)
+            time_in_cycle = run_time % CYCLE_DURATION
+
+            elapsed_boundary = 0
+
+            for stage in STAGES:
+                stage_end = elapsed_boundary + stage["duration"]
+
+                if time_in_cycle < stage_end:
+                    key = (cycle_index, stage["phase"])
+
+                    if self._last_logged_key != key:
+                        _log_phase_transition(
+                            stage["phase"],
+                            cycle_index + 1,
+                            stage["users"],
+                            run_time
+                        )
+
+                        self._last_logged_key = key
+
+                        _current_load_range["min"], \
+                        _current_load_range["max"] = stage["load_range"]
+
+                    return (
+                        stage["users"],
+                        stage["spawn_rate"]
+                    )
+
+                elapsed_boundary = stage_end
+
             return None
-
-        run_time = self.get_run_time()
-        total_duration = CYCLE_DURATION * CYCLES
-
-        if run_time >= total_duration:
-            return None  # all cycles finished -> stop
-
-        cycle_index = int(run_time // CYCLE_DURATION)
-        time_in_cycle = run_time % CYCLE_DURATION
-
-        elapsed_boundary = 0
-        for stage in STAGES:
-            stage_end = elapsed_boundary + stage["duration"]
-            if time_in_cycle < stage_end:
-                key = (cycle_index, stage["phase"])
-                if self._last_logged_key != key:
-                    _log_phase_transition(stage["phase"], cycle_index + 1, stage["users"], run_time)
-                    self._last_logged_key = key
-                    _current_load_range["min"], _current_load_range["max"] = stage["load_range"]
-
-                return (stage["users"], stage["spawn_rate"])
-
-            elapsed_boundary = stage_end
-
-        return None
 
 
 class PermWorkloadUser(HttpUser):
