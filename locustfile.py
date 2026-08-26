@@ -1,47 +1,28 @@
 """
 PERM - Predictive Edge Resource Management
-Locust Traffic Simulation
+Locust Traffic Simulation & Live Presentation Driver
 
-Drives the telemetry_collector's /api/process endpoint through three
-distinct traffic profiles so we can collect labeled training data for the
-Random Forest forecaster:
+Supports 3 execution modes:
 
-    1. STEADY-STATE  - constant, low user count, constant per-request load.
-                        Baseline CPU/latency behavior.
-    2. RAMP          - user count climbs linearly over the phase duration.
-                        Captures how CPU/latency trend as load builds.
-    3. BURST         - user count spikes sharply, holds briefly, then drops.
-                        Captures sudden-shock behavior (the hardest case for
-                        the model to forecast 30s ahead).
+  1. FAST DEMO MODE (PERM_FAST_DEMO=1):
+     Shortens full cycle to 55 seconds (15s steady, 15s ramp, 15s burst, 10s cooldown).
+     Perfect for live presentations so evaluators don't have to wait!
 
-The four phases run back-to-back and repeat for CYCLES full loops in a
-single Locust run via a custom LoadTestShape, so one execution produces
-enough raw telemetry to build a real training set (not just one pass).
-Each cycle uses freshly randomized per-request load within each phase's
-range, so repeated cycles aren't just noisy duplicates of each other.
+  2. MANUAL WEB UI MODE (PERM_MANUAL_TRAFFIC=1):
+     Disables automated shape control completely. Type user counts (10, 50, 100)
+     directly into http://localhost:8089 and Locust spawns them immediately!
 
-Each phase transition (name, cycle number, start time, target user count)
-is appended to phase_log.csv, so feature_engineering.py can later join
-telemetry_log.csv timestamps against this file to label each row with its
-traffic profile.
+  3. STANDARD TRAINING MODE (Default):
+     Full 8.25-minute multi-cycle automated run for high-density training data collection.
 
-Default config: 5 cycles x ~8.25 min/cycle =~ 41 minutes total, yielding
-roughly ~2,400 seconds of raw telemetry -> ~2,300 sliding-window feature
-rows after 30s windowing -> ~1,600 / 350 / 350 after a 70/15/15 split.
-Override CYCLES via the PERM_LOCUST_CYCLES environment variable if you
-want a shorter smoke-test run or a longer one.
+Commands:
+  # Fast 55-second demo run (Recommended for Live Demo):
+  $env:PERM_FAST_DEMO = 1
+  locust -f locustfile.py --host http://127.0.0.1:5000
 
-Run (headless, full multi-cycle run):
-    locust -f locustfile.py --host http://127.0.0.1:5000 --headless
-
-Run a quick 1-cycle smoke test instead:
-    # PowerShell
-    $env:PERM_LOCUST_CYCLES = 1
-    locust -f locustfile.py --host http://127.0.0.1:5000 --headless
-
-Run (with web UI, for manual poking around):
-    locust -f locustfile.py --host http://127.0.0.1:5000
-    then open http://localhost:8089
+  # Manual Web UI mode (Type 10, 50, 100 directly into Web UI):
+  $env:PERM_MANUAL_TRAFFIC = 1
+  locust -f locustfile.py --host http://127.0.0.1:5000
 """
 
 import csv
@@ -49,31 +30,33 @@ import os
 import random
 import time
 
-from locust import HttpUser, task, between
-from locust import LoadTestShape
+from locust import HttpUser, task, between, LoadTestShape
 
 # --------------------------------------------------------------------------
-# Phase schedule (one cycle)
+# Mode Selection via Environment Variables
 # --------------------------------------------------------------------------
-# Each stage: duration_sec, target_user_count, spawn_rate, phase_name, load_range
-# load_range is the (min, max) value sent as "load" to /api/process for that
-# phase, letting per-request intensity vary alongside request volume.
-STAGES = [
-    # -- STEADY-STATE: low, constant concurrency, light/medium load ---------
-    {"duration": 180, "users": 10, "spawn_rate": 2, "phase": "steady", "load_range": (2, 4)},
+IS_MANUAL_MODE = os.environ.get("PERM_MANUAL_TRAFFIC", "0") == "1"
+IS_FAST_DEMO = os.environ.get("PERM_FAST_DEMO", "0") == "1"
 
-    # -- RAMP: users climb from ~10 to ~50 over the phase ---------------------
-    {"duration": 180, "users": 50, "spawn_rate": 1, "phase": "ramp", "load_range": (3, 6)},
-
-    # -- BURST: sharp spike to a high user count, brief hold ------------------
-    {"duration": 45, "users": 100, "spawn_rate": 50, "phase": "burst", "load_range": (5, 10)},
-
-    # -- COOLDOWN: drop back down, let the system settle -----------------------
-    {"duration": 90, "users": 5, "spawn_rate": 20, "phase": "cooldown", "load_range": (1, 2)},
-]
+if IS_FAST_DEMO:
+    # ~100s total: short enough to be snappy, long enough for accurate ML windows
+    STAGES = [
+        {"duration": 20, "users": 8,  "spawn_rate": 3,  "phase": "steady",   "load_range": (2, 3)},
+        {"duration": 25, "users": 45, "spawn_rate": 8,  "phase": "ramp",     "load_range": (4, 7)},
+        {"duration": 30, "users": 90, "spawn_rate": 25, "phase": "burst",    "load_range": (7, 10)},
+        {"duration": 25, "users": 5,  "spawn_rate": 20, "phase": "cooldown", "load_range": (1, 2)},
+    ]
+else:
+    # Standard training schedule (~8.25 min/cycle)
+    STAGES = [
+        {"duration": 180, "users": 10,  "spawn_rate": 2,  "phase": "steady",   "load_range": (2, 4)},
+        {"duration": 180, "users": 50,  "spawn_rate": 1,  "phase": "ramp",     "load_range": (3, 6)},
+        {"duration": 45,  "users": 100, "spawn_rate": 50, "phase": "burst",    "load_range": (5, 10)},
+        {"duration": 90,  "users": 5,   "spawn_rate": 20, "phase": "cooldown", "load_range": (1, 2)},
+    ]
 
 CYCLE_DURATION = sum(stage["duration"] for stage in STAGES)
-CYCLES = int(os.environ.get("PERM_LOCUST_CYCLES", 5))
+CYCLES = int(os.environ.get("PERM_LOCUST_CYCLES", 5 if not IS_FAST_DEMO else 1))
 
 PHASE_LOG_PATH = os.path.join(os.path.dirname(__file__), "phase_log.csv")
 PHASE_LOG_FIELDS = ["timestamp", "phase", "cycle", "target_users", "elapsed_sec"]
@@ -99,34 +82,29 @@ def _log_phase_transition(phase_name: str, cycle: int, target_users: int, elapse
         })
 
 
-# --------------------------------------------------------------------------
-# Current phase state, shared with the HttpUser tasks below so each request
-# uses the load_range appropriate to whatever phase is currently active.
-# --------------------------------------------------------------------------
 _current_load_range = {"min": 2, "max": 4}
 
 
 class TrafficStagesShape(LoadTestShape):
     """
-    Drives Locust through STAGES sequentially, repeating the full cycle
-    CYCLES times, so one run yields CYCLES x len(STAGES) phase segments.
-    Returns None once all cycles are complete, which stops the test
-    automatically.
+    Drives automated traffic stages when not in MANUAL mode.
     """
-
     def __init__(self):
         super().__init__()
-        self._last_logged_key = None  # (cycle, phase) tuple, avoids duplicate log rows
+        self._last_logged_key = None
 
     def tick(self):
+        if IS_MANUAL_MODE:
+            # Disable shape logic in manual mode so Locust Web UI inputs work directly
+            return None
+
         run_time = self.get_run_time()
         total_duration = CYCLE_DURATION * CYCLES
 
         if run_time >= total_duration:
-            return None  # all cycles finished -> stop the test
+            return None  # all cycles finished -> stop
 
-        # Which cycle are we in, and how far into that cycle?
-        cycle_index = int(run_time // CYCLE_DURATION)  # 0-based
+        cycle_index = int(run_time // CYCLE_DURATION)
         time_in_cycle = run_time % CYCLE_DURATION
 
         elapsed_boundary = 0
@@ -143,17 +121,10 @@ class TrafficStagesShape(LoadTestShape):
 
             elapsed_boundary = stage_end
 
-        # Shouldn't be reachable, but stop gracefully if we fall through.
         return None
 
 
 class PermWorkloadUser(HttpUser):
-    """
-    Simulated client hitting the PERM telemetry collector's workload
-    endpoint. wait_time is short since we want to generate meaningful
-    request volume; actual concurrency/user-count is controlled entirely
-    by TrafficStagesShape above.
-    """
     wait_time = between(0.2, 1.0)
 
     @task

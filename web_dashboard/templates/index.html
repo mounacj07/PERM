@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PERM — Predictive Edge Resource Management</title>
+
+  <!-- Clean Professional Typography: Inter (UI) + JetBrains Mono (Metrics) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --bg-base: #0b0f19;
+      --bg-surface: #111827;
+      --bg-surface-hover: #1f2937;
+      --bg-card-subtle: #161f30;
+
+      --border-color: #1e293b;
+      --border-subtle: #192338;
+
+      --color-primary: #38bdf8;
+      --color-success: #10b981;
+      --color-warning: #f59e0b;
+      --color-danger: #f43f5e;
+      --color-purple: #a855f7;
+
+      --text-heading: #f8fafc;
+      --text-main: #cbd5e1;
+      --text-muted: #64748b;
+      --text-dark: #475569;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: radial-gradient(circle at 50% -20%, #172033, var(--bg-base) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 1.5rem 2rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .num { font-variant-numeric: tabular-nums; }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    /* Top Navigation Navbar */
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.9rem 1.25rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      margin-bottom: 1.25rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-mark {
+      width: 36px;
+      height: 36px;
+      background: #0284c7;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1.1rem;
+      color: #ffffff;
+    }
+
+    .brand-title h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .brand-title p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.1rem;
+    }
+
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #34d399;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .segmented-control {
+      background: #090e17;
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 3px;
+      display: flex;
+      gap: 3px;
+    }
+
+    .segment-btn {
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .segment-btn.active {
+      background: #1e293b;
+      color: var(--text-heading);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .segment-btn:hover:not(.active) {
+      color: var(--text-main);
+    }
+
+    .action-btn-danger {
+      padding: 7px 14px;
+      border-radius: 6px;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      background: rgba(244, 63, 94, 0.08);
+      color: #fda4af;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .action-btn-danger:hover {
+      background: rgba(244, 63, 94, 0.18);
+      border-color: var(--color-danger);
+    }
+
+    /* Enterprise Intelligence Strip */
+    .intel-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .intel-pill {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .intel-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+    }
+
+    .intel-info h4 {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .intel-info p {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-heading);
+      margin-top: 0.1rem;
+    }
+
+    /* Manual Approval Action Banner */
+    .approval-banner {
+      display: none;
+      background: rgba(245, 158, 11, 0.08);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 10px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .banner-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .banner-text h3 {
+      color: #fef08a;
+      font-size: 0.92rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .banner-text p {
+      color: var(--text-main);
+      font-size: 0.84rem;
+      margin-top: 0.2rem;
+    }
+
+    .lead-tag {
+      background: rgba(244, 63, 94, 0.15);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      color: #fecdd3;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.7rem;
+    }
+
+    .banner-buttons {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    .btn-approve {
+      background: #10b981;
+      color: #ffffff;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-approve:hover { background: #059669; }
+
+    .btn-dismiss {
+      background: rgba(255, 255, 255, 0.04);
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .btn-dismiss:hover { background: rgba(255, 255, 255, 0.08); color: var(--text-heading); }
+
+    /* Layout Grids */
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .grid-charts {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .grid-tables {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    /* Professional Component Cards */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: #2e3d55;
+      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    .card-kpi {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 130px;
+    }
+
+    .card-kpi::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+    }
+
+    .kpi-cpu::before { background: var(--color-primary); }
+    .kpi-lat::before { background: var(--color-success); }
+    .kpi-workers::before { background: var(--color-purple); }
+    .kpi-status::before { background: var(--color-warning); }
+
+    .card-header-sm {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.35rem;
+    }
+
+    .card-title-sm {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .card-tag {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-dark);
+      background: rgba(255, 255, 255, 0.03);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .card-value {
+      font-size: 1.85rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      letter-spacing: -0.02em;
+      margin: 0.2rem 0;
+    }
+
+    .card-subtext {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .forecast-pill {
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    /* Driver Badge Pill */
+    .driver-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+    }
+
+    /* System Status Badges */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .status-badge-ok { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+    .status-badge-warn { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+    .status-badge-crit { background: rgba(244, 63, 94, 0.12); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.25); }
+
+    /* Chart Cards */
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .chart-title-text {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-heading);
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 250px;
+      width: 100%;
+    }
+
+    /* Tables */
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .table-title-text {
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: var(--text-heading);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 8px 10px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-main);
+    }
+
+    tr:hover td {
+      background: var(--bg-surface-hover);
+    }
+
+    .tag-auto { color: var(--color-primary); font-weight: 600; }
+    .tag-manual { color: var(--color-purple); font-weight: 600; }
+
+    @media (max-width: 1024px) {
+      .intel-bar { grid-template-columns: repeat(2, 1fr); }
+      .grid-kpi { grid-template-columns: repeat(2, 1fr); }
+      .grid-charts { grid-template-columns: 1fr; }
+      .grid-tables { grid-template-columns: 1fr; }
+    }
+
+    /* ── Pulsing alert badge ── */
+    @keyframes pulse-glow-crit {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, 0.5); }
+      50%       { box-shadow: 0 0 0 7px rgba(244, 63, 94, 0); }
+    }
+    @keyframes pulse-glow-warn {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.5); }
+      50%       { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0); }
+    }
+    .status-badge-crit.pulse-badge { animation: pulse-glow-crit 1.4s ease-in-out infinite; }
+    .status-badge-warn.pulse-badge { animation: pulse-glow-warn 1.8s ease-in-out infinite; }
+
+    /* ── Pulse dot animation ── */
+    @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(1.4)} }
+    .pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+    /* ── Chart future zone label ── */
+    .chart-future-label {
+      position: absolute;
+      top: 6px; right: 10px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: rgba(244, 63, 94, 0.65);
+      background: rgba(244, 63, 94, 0.07);
+      border: 1px solid rgba(244, 63, 94, 0.18);
+      border-radius: 4px;
+      padding: 2px 7px;
+      pointer-events: none;
+    }
+
+    /* ── Toast notification system ── */
+    #toast-container {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      z-index: 9999;
+      max-width: 360px;
+    }
+
+    .perm-toast {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      background: #111827;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 0.85rem 1rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+      position: relative;
+      overflow: hidden;
+      transform: translateX(120%);
+      opacity: 0;
+      transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease;
+    }
+
+    .perm-toast.toast-visible {
+      transform: translateX(0);
+      opacity: 1;
+    }
+
+    /* Severity colour left bar */
+    .toast-auto    { border-left: 3px solid #38bdf8; }
+    .toast-manual  { border-left: 3px solid #a855f7; }
+    .toast-warning { border-left: 3px solid #f59e0b; }
+    .toast-critical { border-left: 3px solid #f43f5e; }
+
+    .toast-icon {
+      font-size: 1.3rem;
+      line-height: 1;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .toast-body { flex: 1; min-width: 0; }
+
+    .toast-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #f8fafc;
+      letter-spacing: 0.01em;
+      margin-bottom: 0.2rem;
+    }
+
+    .toast-message {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      line-height: 1.4;
+    }
+
+    .toast-sub {
+      font-size: 0.73rem;
+      color: #64748b;
+      margin-top: 0.2rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .toast-close {
+      background: none;
+      border: none;
+      color: #475569;
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      margin-top: 1px;
+      transition: color 0.15s;
+    }
+    .toast-close:hover { color: #94a3b8; }
+
+    /* Progress bar at bottom of toast */
+    .toast-progress {
+      position: absolute;
+      bottom: 0; left: 0;
+      height: 2px;
+      width: 100%;
+      background: rgba(255,255,255,0.12);
+    }
+    .toast-auto    .toast-progress { background: rgba(56,189,248,0.55); }
+    .toast-manual  .toast-progress { background: rgba(168,85,247,0.55); }
+    .toast-warning .toast-progress { background: rgba(245,158,11,0.55); }
+    .toast-critical .toast-progress { background: rgba(244,63,94,0.55); }
+  </style>
+</head>
+<body>
+
+  <!-- Navbar -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div class="brand-title">
+        <h1>
+          PERM Edge Control Center
+          <span class="live-indicator"><span class="pulse-dot"></span> TELEMETRY LIVE</span>
+        </h1>
+        <p>Real-Time Edge Resource Telemetry & Proactive Machine Learning Forecasts</p>
+      </div>
+    </div>
+    <div class="header-controls">
+      <div class="segmented-control">
+        <button class="segment-btn active" id="btn-mode-auto" onclick="setScalingMode('AUTO')">AUTO ALLOCATION</button>
+        <button class="segment-btn" id="btn-mode-manual" onclick="setScalingMode('MANUAL')">MANUAL APPROVAL</button>
+      </div>
+      <button class="action-btn-danger" onclick="resetCapacity()">Reset Capacity</button>
+    </div>
+  </header>
+
+  <!-- Enterprise Intelligence Strip -->
+  <div class="intel-bar">
+    <div class="intel-pill">
+      <div class="intel-icon">🎯</div>
+      <div class="intel-info">
+        <h4>Model Accuracy</h4>
+        <p class="num">95.4% R² Variance Explained</p>
+      </div>
+    </div>
+
+    <div class="intel-pill">
+      <div class="intel-icon">⚡</div>
+      <div class="intel-info">
+        <h4>Proactive Lead Time</h4>
+        <p class="num">~25.5s Advance Notice</p>
+      </div>
+    </div>
+
+    <div class="intel-pill">
+      <div class="intel-icon">⏱️</div>
+      <div class="intel-info">
+        <h4>Latency MAE Error</h4>
+        <p class="num">±1.50 ms Average Error</p>
+      </div>
+    </div>
+
+    <div class="intel-pill">
+      <div class="intel-icon">🧠</div>
+      <div class="intel-info">
+        <h4>ML Architecture</h4>
+        <p class="num">Voting Ensemble (ET + HGB)</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manual Approval Action Banner -->
+  <div class="approval-banner" id="approval-banner">
+    <div class="banner-inner">
+      <div class="banner-text">
+        <h3>
+          ⚠️ PROACTIVE SLO BREACH WARNING
+          <span class="lead-tag mono" id="banner-lead-time">~25.5s LEAD TIME</span>
+        </h3>
+        <p id="banner-message">CPU utilization forecast to breach 85% SLO threshold in 30 seconds. Approve +2 Edge Worker Cores?</p>
+      </div>
+      <div class="banner-buttons">
+        <button class="btn-approve" onclick="approvePendingScaling()">Approve Scaling (+2 Cores)</button>
+        <button class="btn-dismiss" onclick="declinePendingScaling()">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Grid -->
+  <div class="grid-kpi">
+    <div class="card card-kpi kpi-cpu">
+      <div class="card-header-sm">
+        <span class="card-title-sm">CPU Utilization</span>
+        <span class="card-tag mono">TELEMETRY 1s</span>
+      </div>
+      <div class="card-value num" id="val-cpu" style="color: var(--color-primary);">-- %</div>
+      <div class="card-subtext">
+        <span>30s Forecast:</span>
+        <span class="forecast-pill num" id="sub-cpu">-- %</span>
+      </div>
+    </div>
+
+    <div class="card card-kpi kpi-lat">
+      <div class="card-header-sm">
+        <span class="card-title-sm">Response Latency</span>
+        <span class="card-tag mono">TELEMETRY 1s</span>
+      </div>
+      <div class="card-value num" id="val-lat" style="color: var(--color-success);">-- ms</div>
+      <div class="card-subtext">
+        <span>30s Forecast:</span>
+        <span class="forecast-pill num" id="sub-lat">-- ms</span>
+      </div>
+    </div>
+
+    <div class="card card-kpi kpi-workers">
+      <div class="card-header-sm">
+        <span class="card-title-sm">Edge Worker Capacity</span>
+        <span class="card-tag mono">CORES ALLOCATED</span>
+      </div>
+      <div class="card-value num" id="val-workers" style="color: var(--color-purple);">2 / 10</div>
+      <div class="card-subtext" id="sub-workers">Mode: AUTO ALLOCATION</div>
+    </div>
+
+    <div class="card card-kpi kpi-status">
+      <div class="card-header-sm">
+        <span class="card-title-sm">System Health</span>
+        <span class="card-tag mono">SLO MONITOR</span>
+      </div>
+      <div style="margin: 0.4rem 0;" id="val-status">
+        <span class="status-badge status-badge-ok">SYSTEM NORMAL</span>
+      </div>
+      <div class="card-subtext" id="sub-alerts">0 Active Alerts</div>
+    </div>
+  </div>
+
+  <!-- Real-Time Telemetry & Forecast Charts -->
+  <div class="grid-charts">
+    <div class="card">
+      <div class="chart-header">
+        <span class="chart-title-text">CPU Utilization: Telemetry vs. 30s ML Forecast</span>
+        <span style="font-size:0.7rem;color:#f43f5e;font-weight:600;letter-spacing:0.04em;">── FORECAST ↗ LEADS BLUE BY 30s</span>
+      </div>
+      <div class="chart-wrapper" style="position:relative;">
+        <canvas id="chart-cpu"></canvas>
+        <div class="chart-future-label">▶ FUTURE ZONE</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="chart-header">
+        <span class="chart-title-text">Response Latency: Telemetry vs. 30s ML Forecast</span>
+        <span style="font-size:0.7rem;color:#fbbf24;font-weight:600;letter-spacing:0.04em;">── FORECAST ↗ LEADS GREEN BY 30s</span>
+      </div>
+      <div class="chart-wrapper" style="position:relative;">
+        <canvas id="chart-lat"></canvas>
+        <div class="chart-future-label">▶ FUTURE ZONE</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-Time Tables Grid -->
+  <div class="grid-tables">
+    <div class="card">
+      <div class="table-header">
+        <span class="table-title-text">Proactive SLO Alert Stream (~25s Lead Time)</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Metric</th>
+            <th>Severity</th>
+            <th>30s Forecast</th>
+            <th>Lead Time</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-alerts">
+          <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: 1.5rem;">No active alerts recorded</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <div class="table-header">
+        <span class="table-title-text">Edge Resource Scaling Audit Log</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Mode</th>
+            <th>Action</th>
+            <th>Worker Shift</th>
+            <th>Approved By</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-history">
+          <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: 1.5rem;">No scaling events logged yet</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="/static/dashboard.js"></script>
+</body>
+</html>

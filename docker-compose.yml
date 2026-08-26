@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  telemetry-collector:
+    build: .
+    container_name: perm-telemetry-collector
+    command: python telemetry_collector.py --port 5000
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    volumes:
+      - .:/app
+
+  inference-service:
+    build: .
+    container_name: perm-inference-service
+    command: python inference_service.py --port 5001 --collector-url http://telemetry-collector:5000
+    ports:
+      - "5001:5001"
+    depends_on:
+      - telemetry-collector
+    restart: unless-stopped
+    volumes:
+      - .:/app
+
+  alert-engine:
+    build: .
+    container_name: perm-alert-engine
+    command: python alert_engine.py --port 5002 --inference-url http://inference-service:5001
+    ports:
+      - "5002:5002"
+    depends_on:
+      - inference-service
+    restart: unless-stopped
+    volumes:
+      - .:/app
+
+  remediation-service:
+    build: .
+    container_name: perm-remediation-service
+    command: python remediation_service.py --port 5003 --alert-url http://alert-engine:5002
+    ports:
+      - "5003:5003"
+    depends_on:
+      - alert-engine
+    restart: unless-stopped
+    volumes:
+      - .:/app
+
+  web-dashboard:
+    build: .
+    container_name: perm-web-dashboard
+    command: python web_dashboard/app.py --port 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      - remediation-service
+    restart: unless-stopped
+    volumes:
+      - .:/app
