@@ -1,0 +1,642 @@
+{
+  "timestamp": "2026-10-25T10:55:29.203120+00:00",
+  "profile": "step",
+  "load": 7,
+  "repeats": 3,
+  "modes": [
+    "fixed_2",
+    "fixed_8",
+    "reactive",
+    "perm"
+  ],
+  "mode_aggregates": {
+    "fixed_2": {
+      "pct_ok": {
+        "mean": 45.54,
+        "min": 43.57,
+        "max": 46.73
+      },
+      "goodput_req_s": {
+        "mean": 9.81,
+        "min": 9.62,
+        "max": 9.98
+      },
+      "sec_p95_ok": {
+        "mean": 121.33,
+        "min": 121,
+        "max": 122
+      },
+      "peak_p95_ms": {
+        "mean": 146.11,
+        "min": 141.58,
+        "max": 153.31
+      },
+      "sec_to_first_scale_up": {
+        "mean": null,
+        "min": null,
+        "max": null
+      },
+      "sec_to_p95_recovery": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "worker_seconds_cost": {
+        "mean": 242.67,
+        "min": 242,
+        "max": 244
+      }
+    },
+    "fixed_8": {
+      "pct_ok": {
+        "mean": 100.0,
+        "min": 100.0,
+        "max": 100.0
+      },
+      "goodput_req_s": {
+        "mean": 21.74,
+        "min": 21.27,
+        "max": 22.15
+      },
+      "sec_p95_ok": {
+        "mean": 121.33,
+        "min": 121,
+        "max": 122
+      },
+      "peak_p95_ms": {
+        "mean": 215.88,
+        "min": 207.75,
+        "max": 222.14
+      },
+      "sec_to_first_scale_up": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "sec_to_p95_recovery": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "worker_seconds_cost": {
+        "mean": 970.67,
+        "min": 968,
+        "max": 976
+      }
+    },
+    "reactive": {
+      "pct_ok": {
+        "mean": 98.41,
+        "min": 97.5,
+        "max": 99.15
+      },
+      "goodput_req_s": {
+        "mean": 21.3,
+        "min": 21.08,
+        "max": 21.74
+      },
+      "sec_p95_ok": {
+        "mean": 120.67,
+        "min": 120,
+        "max": 121
+      },
+      "peak_p95_ms": {
+        "mean": 192.59,
+        "min": 126.18,
+        "max": 325.22
+      },
+      "sec_to_first_scale_up": {
+        "mean": 0.82,
+        "min": 0.39,
+        "max": 1.28
+      },
+      "sec_to_p95_recovery": {
+        "mean": 6.88,
+        "min": 0.0,
+        "max": 20.63
+      },
+      "worker_seconds_cost": {
+        "mean": 726.67,
+        "min": 724,
+        "max": 732
+      }
+    },
+    "perm": {
+      "pct_ok": {
+        "mean": 85.69,
+        "min": 73.48,
+        "max": 92.72
+      },
+      "goodput_req_s": {
+        "mean": 18.45,
+        "min": 15.88,
+        "max": 20.15
+      },
+      "sec_p95_ok": {
+        "mean": 121.0,
+        "min": 121,
+        "max": 121
+      },
+      "peak_p95_ms": {
+        "mean": 140.08,
+        "min": 132.06,
+        "max": 147.32
+      },
+      "sec_to_first_scale_up": {
+        "mean": 9.79,
+        "min": 5.89,
+        "max": 14.23
+      },
+      "sec_to_p95_recovery": {
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "worker_seconds_cost": {
+        "mean": 533.33,
+        "min": 374,
+        "max": 690
+      }
+    }
+  },
+  "individual_runs": {
+    "fixed_2": [
+      {
+        "run_id": "fixed_2_rep1_1792924099",
+        "mode": "fixed_2",
+        "repeat": 1,
+        "seed": 42,
+        "duration_sec": 121.74,
+        "total_arrivals": 2558,
+        "total_ok": 1195,
+        "total_rejected": 1362,
+        "total_timeout": 0,
+        "pct_ok": 46.73,
+        "goodput_req_s": 9.82,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 153.31,
+        "sec_to_first_scale_up": null,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 242,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      },
+      {
+        "run_id": "fixed_2_rep2_1792924230",
+        "mode": "fixed_2",
+        "repeat": 2,
+        "seed": 43,
+        "duration_sec": 121.88,
+        "total_arrivals": 2691,
+        "total_ok": 1173,
+        "total_rejected": 1519,
+        "total_timeout": 0,
+        "pct_ok": 43.57,
+        "goodput_req_s": 9.62,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 143.45,
+        "sec_to_first_scale_up": null,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 242,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      },
+      {
+        "run_id": "fixed_2_rep3_1792924361",
+        "mode": "fixed_2",
+        "repeat": 3,
+        "seed": 44,
+        "duration_sec": 122.51,
+        "total_arrivals": 2640,
+        "total_ok": 1223,
+        "total_rejected": 1417,
+        "total_timeout": 0,
+        "pct_ok": 46.33,
+        "goodput_req_s": 9.98,
+        "sec_p95_ok": 122,
+        "peak_p95_ms": 141.58,
+        "sec_to_first_scale_up": null,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 244,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      }
+    ],
+    "fixed_8": [
+      {
+        "run_id": "fixed_8_rep1_1792924492",
+        "mode": "fixed_8",
+        "repeat": 1,
+        "seed": 42,
+        "duration_sec": 121.86,
+        "total_arrivals": 2591,
+        "total_ok": 2592,
+        "total_rejected": 0,
+        "total_timeout": 0,
+        "pct_ok": 100.0,
+        "goodput_req_s": 21.27,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 222.14,
+        "sec_to_first_scale_up": 0.0,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 968,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      },
+      {
+        "run_id": "fixed_8_rep2_1792924627",
+        "mode": "fixed_8",
+        "repeat": 2,
+        "seed": 43,
+        "duration_sec": 121.75,
+        "total_arrivals": 2698,
+        "total_ok": 2697,
+        "total_rejected": 0,
+        "total_timeout": 0,
+        "pct_ok": 100.0,
+        "goodput_req_s": 22.15,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 217.75,
+        "sec_to_first_scale_up": 0.0,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 968,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      },
+      {
+        "run_id": "fixed_8_rep3_1792924763",
+        "mode": "fixed_8",
+        "repeat": 3,
+        "seed": 44,
+        "duration_sec": 122.68,
+        "total_arrivals": 2669,
+        "total_ok": 2675,
+        "total_rejected": 0,
+        "total_timeout": 0,
+        "pct_ok": 100.0,
+        "goodput_req_s": 21.8,
+        "sec_p95_ok": 122,
+        "peak_p95_ms": 207.75,
+        "sec_to_first_scale_up": 0.0,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 976,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      }
+    ],
+    "reactive": [
+      {
+        "run_id": "reactive_rep1_1792924899",
+        "mode": "reactive",
+        "repeat": 1,
+        "seed": 42,
+        "duration_sec": 121.84,
+        "total_arrivals": 2590,
+        "total_ok": 2568,
+        "total_rejected": 22,
+        "total_timeout": 0,
+        "pct_ok": 99.15,
+        "goodput_req_s": 21.08,
+        "sec_p95_ok": 120,
+        "peak_p95_ms": 325.22,
+        "sec_to_first_scale_up": 0.39,
+        "sec_to_p95_recovery": 20.63,
+        "worker_seconds_cost": 724,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      },
+      {
+        "run_id": "reactive_rep2_1792925030",
+        "mode": "reactive",
+        "repeat": 2,
+        "seed": 43,
+        "duration_sec": 122.16,
+        "total_arrivals": 2695,
+        "total_ok": 2656,
+        "total_rejected": 38,
+        "total_timeout": 0,
+        "pct_ok": 98.59,
+        "goodput_req_s": 21.74,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 126.18,
+        "sec_to_first_scale_up": 0.78,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 732,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      },
+      {
+        "run_id": "reactive_rep3_1792925160",
+        "mode": "reactive",
+        "repeat": 3,
+        "seed": 44,
+        "duration_sec": 122.01,
+        "total_arrivals": 2634,
+        "total_ok": 2572,
+        "total_rejected": 66,
+        "total_timeout": 0,
+        "pct_ok": 97.5,
+        "goodput_req_s": 21.08,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 126.38,
+        "sec_to_first_scale_up": 1.28,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 724,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      }
+    ],
+    "perm": [
+      {
+        "run_id": "perm_rep1_1792925290",
+        "mode": "perm",
+        "repeat": 1,
+        "seed": 42,
+        "duration_sec": 122.0,
+        "total_arrivals": 2591,
+        "total_ok": 2356,
+        "total_rejected": 237,
+        "total_timeout": 0,
+        "pct_ok": 90.86,
+        "goodput_req_s": 19.31,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 140.85,
+        "sec_to_first_scale_up": 9.24,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 536,
+        "perm_scale_events": [
+          {
+            "alert_id": "ALT-1792925358986",
+            "provenance": "FORECAST",
+            "metric": "latency_ms",
+            "current_value": 126.01,
+            "forecast_value_30s": 160.27,
+            "slo_threshold": 150.0,
+            "relative_to_burst_start_sec": 7.84,
+            "is_before_burst": false,
+            "alert_raw": {
+              "alert_id": "ALT-1792925358986",
+              "timestamp": "2026-10-25T10:49:18.409012+00:00",
+              "target_timestamp": "2026-10-25T10:49:48.409028+00:00",
+              "metric": "latency_ms",
+              "severity": "WARNING",
+              "current_value": "126.01",
+              "forecast_value_30s": "160.27",
+              "slo_threshold": "150.0",
+              "lead_time_sec": "25.5",
+              "message": "PROACTIVE WARNING ALERT: latency_ms forecast to breach SLO (160.3ms >= 150.0ms) in ~25.5s. Current: 126.0ms."
+            }
+          },
+          {
+            "alert_id": "ALT-1792925363611",
+            "provenance": "FORECAST",
+            "metric": "cpu_percent",
+            "current_value": 49.3,
+            "forecast_value_30s": 74.48,
+            "slo_threshold": 70.0,
+            "relative_to_burst_start_sec": 12.89,
+            "is_before_burst": false,
+            "alert_raw": {
+              "alert_id": "ALT-1792925363611",
+              "timestamp": "2026-10-25T10:49:23.457759+00:00",
+              "target_timestamp": "2026-10-25T10:49:53.457776+00:00",
+              "metric": "cpu_percent",
+              "severity": "WARNING",
+              "current_value": "49.3",
+              "forecast_value_30s": "74.48",
+              "slo_threshold": "70.0",
+              "lead_time_sec": "25.5",
+              "message": "PROACTIVE WARNING ALERT: cpu_percent forecast to breach SLO (74.5% >= 70.0%) in ~25.5s. Current: 49.3%."
+            }
+          }
+        ],
+        "matching_alert_rows": [
+          {
+            "alert_id": "ALT-1792925358986",
+            "timestamp": "2026-10-25T10:49:18.409012+00:00",
+            "target_timestamp": "2026-10-25T10:49:48.409028+00:00",
+            "metric": "latency_ms",
+            "severity": "WARNING",
+            "current_value": "126.01",
+            "forecast_value_30s": "160.27",
+            "slo_threshold": "150.0",
+            "lead_time_sec": "25.5",
+            "message": "PROACTIVE WARNING ALERT: latency_ms forecast to breach SLO (160.3ms >= 150.0ms) in ~25.5s. Current: 126.0ms."
+          },
+          {
+            "alert_id": "ALT-1792925363611",
+            "timestamp": "2026-10-25T10:49:23.457759+00:00",
+            "target_timestamp": "2026-10-25T10:49:53.457776+00:00",
+            "metric": "cpu_percent",
+            "severity": "WARNING",
+            "current_value": "49.3",
+            "forecast_value_30s": "74.48",
+            "slo_threshold": "70.0",
+            "lead_time_sec": "25.5",
+            "message": "PROACTIVE WARNING ALERT: cpu_percent forecast to breach SLO (74.5% >= 70.0%) in ~25.5s. Current: 49.3%."
+          }
+        ]
+      },
+      {
+        "run_id": "perm_rep2_1792925445",
+        "mode": "perm",
+        "repeat": 2,
+        "seed": 43,
+        "duration_sec": 121.99,
+        "total_arrivals": 2649,
+        "total_ok": 2458,
+        "total_rejected": 193,
+        "total_timeout": 0,
+        "pct_ok": 92.72,
+        "goodput_req_s": 20.15,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 147.32,
+        "sec_to_first_scale_up": 5.89,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 690,
+        "perm_scale_events": [
+          {
+            "alert_id": "ALT-1792925501381",
+            "provenance": "FORECAST",
+            "metric": "latency_ms",
+            "current_value": 126.0,
+            "forecast_value_30s": 200.61,
+            "slo_threshold": 150.0,
+            "relative_to_burst_start_sec": 8.21,
+            "is_before_burst": false,
+            "alert_raw": {
+              "alert_id": "ALT-1792925501381",
+              "timestamp": "2026-10-25T10:51:40.432694+00:00",
+              "target_timestamp": "2026-10-25T10:52:10.432710+00:00",
+              "metric": "latency_ms",
+              "severity": "WARNING",
+              "current_value": "126.0",
+              "forecast_value_30s": "200.61",
+              "slo_threshold": "150.0",
+              "lead_time_sec": "25.5",
+              "message": "PROACTIVE WARNING ALERT: latency_ms forecast to breach SLO (200.6ms >= 150.0ms) in ~25.5s. Current: 126.0ms."
+            }
+          },
+          {
+            "alert_id": "ALT-1792925512029",
+            "provenance": "FORECAST",
+            "metric": "cpu_percent",
+            "current_value": 61.2,
+            "forecast_value_30s": 79.48,
+            "slo_threshold": 70.0,
+            "relative_to_burst_start_sec": 18.38,
+            "is_before_burst": false,
+            "alert_raw": {
+              "alert_id": "ALT-1792925512029",
+              "timestamp": "2026-10-25T10:51:50.604436+00:00",
+              "target_timestamp": "2026-10-25T10:52:20.604456+00:00",
+              "metric": "cpu_percent",
+              "severity": "WARNING",
+              "current_value": "61.2",
+              "forecast_value_30s": "79.48",
+              "slo_threshold": "70.0",
+              "lead_time_sec": "25.5",
+              "message": "PROACTIVE WARNING ALERT: cpu_percent forecast to breach SLO (79.5% >= 70.0%) in ~25.5s. Current: 61.2%."
+            }
+          }
+        ],
+        "matching_alert_rows": [
+          {
+            "alert_id": "ALT-1792925501381",
+            "timestamp": "2026-10-25T10:51:40.432694+00:00",
+            "target_timestamp": "2026-10-25T10:52:10.432710+00:00",
+            "metric": "latency_ms",
+            "severity": "WARNING",
+            "current_value": "126.0",
+            "forecast_value_30s": "200.61",
+            "slo_threshold": "150.0",
+            "lead_time_sec": "25.5",
+            "message": "PROACTIVE WARNING ALERT: latency_ms forecast to breach SLO (200.6ms >= 150.0ms) in ~25.5s. Current: 126.0ms."
+          },
+          {
+            "alert_id": "ALT-1792925512029",
+            "timestamp": "2026-10-25T10:51:50.604436+00:00",
+            "target_timestamp": "2026-10-25T10:52:20.604456+00:00",
+            "metric": "cpu_percent",
+            "severity": "WARNING",
+            "current_value": "61.2",
+            "forecast_value_30s": "79.48",
+            "slo_threshold": "70.0",
+            "lead_time_sec": "25.5",
+            "message": "PROACTIVE WARNING ALERT: cpu_percent forecast to breach SLO (79.5% >= 70.0%) in ~25.5s. Current: 61.2%."
+          }
+        ]
+      },
+      {
+        "run_id": "perm_rep3_1792925586",
+        "mode": "perm",
+        "repeat": 3,
+        "seed": 44,
+        "duration_sec": 122.01,
+        "total_arrivals": 2631,
+        "total_ok": 1937,
+        "total_rejected": 699,
+        "total_timeout": 0,
+        "pct_ok": 73.48,
+        "goodput_req_s": 15.88,
+        "sec_p95_ok": 121,
+        "peak_p95_ms": 132.06,
+        "sec_to_first_scale_up": 14.23,
+        "sec_to_p95_recovery": 0.0,
+        "worker_seconds_cost": 374,
+        "perm_scale_events": [],
+        "matching_alert_rows": []
+      }
+    ]
+  },
+  "perm_scale_up_alerts": [
+    {
+      "alert_id": "ALT-1792925358986",
+      "provenance": "FORECAST",
+      "metric": "latency_ms",
+      "current_value": 126.01,
+      "forecast_value_30s": 160.27,
+      "slo_threshold": 150.0,
+      "relative_to_burst_start_sec": 7.84,
+      "is_before_burst": false,
+      "alert_raw": {
+        "alert_id": "ALT-1792925358986",
+        "timestamp": "2026-10-25T10:49:18.409012+00:00",
+        "target_timestamp": "2026-10-25T10:49:48.409028+00:00",
+        "metric": "latency_ms",
+        "severity": "WARNING",
+        "current_value": "126.01",
+        "forecast_value_30s": "160.27",
+        "slo_threshold": "150.0",
+        "lead_time_sec": "25.5",
+        "message": "PROACTIVE WARNING ALERT: latency_ms forecast to breach SLO (160.3ms >= 150.0ms) in ~25.5s. Current: 126.0ms."
+      }
+    },
+    {
+      "alert_id": "ALT-1792925363611",
+      "provenance": "FORECAST",
+      "metric": "cpu_percent",
+      "current_value": 49.3,
+      "forecast_value_30s": 74.48,
+      "slo_threshold": 70.0,
+      "relative_to_burst_start_sec": 12.89,
+      "is_before_burst": false,
+      "alert_raw": {
+        "alert_id": "ALT-1792925363611",
+        "timestamp": "2026-10-25T10:49:23.457759+00:00",
+        "target_timestamp": "2026-10-25T10:49:53.457776+00:00",
+        "metric": "cpu_percent",
+        "severity": "WARNING",
+        "current_value": "49.3",
+        "forecast_value_30s": "74.48",
+        "slo_threshold": "70.0",
+        "lead_time_sec": "25.5",
+        "message": "PROACTIVE WARNING ALERT: cpu_percent forecast to breach SLO (74.5% >= 70.0%) in ~25.5s. Current: 49.3%."
+      }
+    },
+    {
+      "alert_id": "ALT-1792925501381",
+      "provenance": "FORECAST",
+      "metric": "latency_ms",
+      "current_value": 126.0,
+      "forecast_value_30s": 200.61,
+      "slo_threshold": 150.0,
+      "relative_to_burst_start_sec": 8.21,
+      "is_before_burst": false,
+      "alert_raw": {
+        "alert_id": "ALT-1792925501381",
+        "timestamp": "2026-10-25T10:51:40.432694+00:00",
+        "target_timestamp": "2026-10-25T10:52:10.432710+00:00",
+        "metric": "latency_ms",
+        "severity": "WARNING",
+        "current_value": "126.0",
+        "forecast_value_30s": "200.61",
+        "slo_threshold": "150.0",
+        "lead_time_sec": "25.5",
+        "message": "PROACTIVE WARNING ALERT: latency_ms forecast to breach SLO (200.6ms >= 150.0ms) in ~25.5s. Current: 126.0ms."
+      }
+    },
+    {
+      "alert_id": "ALT-1792925512029",
+      "provenance": "FORECAST",
+      "metric": "cpu_percent",
+      "current_value": 61.2,
+      "forecast_value_30s": 79.48,
+      "slo_threshold": 70.0,
+      "relative_to_burst_start_sec": 18.38,
+      "is_before_burst": false,
+      "alert_raw": {
+        "alert_id": "ALT-1792925512029",
+        "timestamp": "2026-10-25T10:51:50.604436+00:00",
+        "target_timestamp": "2026-10-25T10:52:20.604456+00:00",
+        "metric": "cpu_percent",
+        "severity": "WARNING",
+        "current_value": "61.2",
+        "forecast_value_30s": "79.48",
+        "slo_threshold": "70.0",
+        "lead_time_sec": "25.5",
+        "message": "PROACTIVE WARNING ALERT: cpu_percent forecast to breach SLO (79.5% >= 70.0%) in ~25.5s. Current: 61.2%."
+      }
+    }
+  ]
+}

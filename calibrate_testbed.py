@@ -255,6 +255,13 @@ def main():
         r = calibrate_workers(base_url, n, args.load)
         results.append(r)
 
+    # Fetch collector capacity info
+    cap_info = {}
+    try:
+        cap_info = requests.get(f"{base_url}/api/capacity", timeout=3.0).json()
+    except Exception:
+        pass
+
     output = {
         "calibration_time": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "base_url": base_url,
@@ -262,6 +269,9 @@ def main():
         "ms_per_load": float(os.environ.get("MS_PER_LOAD", "18")),
         "saturation_p95_threshold_ms": SATURATION_P95_MS,
         "saturation_error_threshold_pct": SATURATION_ERROR_PCT,
+        "cpu_count": cap_info.get("cpu_count", os.cpu_count() or 4),
+        "pinning_used": cap_info.get("pinning_used"),
+        "queue_capacity": cap_info.get("queue_capacity", int(os.environ.get("QUEUE_CAPACITY", "20"))),
         "results": results,
     }
 

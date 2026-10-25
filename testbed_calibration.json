@@ -1,0 +1,620 @@
+{
+  "calibration_time": "2026-10-25T10:24:08Z",
+  "base_url": "http://127.0.0.1:5000",
+  "load": 7,
+  "ms_per_load": 18.0,
+  "saturation_p95_threshold_ms": 300.0,
+  "saturation_error_threshold_pct": 1.0,
+  "cpu_count": 16,
+  "pinning_used": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "queue_capacity": 20,
+  "results": [
+    {
+      "n_workers": 1,
+      "load": 7,
+      "ms_per_load": 18.0,
+      "saturation_rps": 7.89,
+      "saturation_p95_threshold_ms": 300.0,
+      "saturation_error_threshold_pct": 1.0,
+      "ramp_table": [
+        {
+          "target_rps": 1,
+          "actual_rps": 1.09,
+          "n_requests": 10,
+          "p95_latency_ms": 146.36,
+          "avg_latency_ms": 139.86,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 3,
+          "actual_rps": 3.12,
+          "n_requests": 15,
+          "p95_latency_ms": 153.64,
+          "avg_latency_ms": 141.58,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 5,
+          "actual_rps": 5.05,
+          "n_requests": 25,
+          "p95_latency_ms": 147.63,
+          "avg_latency_ms": 140.1,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 7,
+          "actual_rps": 7.01,
+          "n_requests": 35,
+          "p95_latency_ms": 156.9,
+          "avg_latency_ms": 142.8,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 9,
+          "actual_rps": 7.89,
+          "n_requests": 45,
+          "p95_latency_ms": 780.89,
+          "avg_latency_ms": 478.43,
+          "error_count": 0,
+          "error_pct": 0.0
+        }
+      ]
+    },
+    {
+      "n_workers": 2,
+      "load": 7,
+      "ms_per_load": 18.0,
+      "saturation_rps": 15.59,
+      "saturation_p95_threshold_ms": 300.0,
+      "saturation_error_threshold_pct": 1.0,
+      "ramp_table": [
+        {
+          "target_rps": 1,
+          "actual_rps": 1.09,
+          "n_requests": 10,
+          "p95_latency_ms": 153.17,
+          "avg_latency_ms": 141.08,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 3,
+          "actual_rps": 3.12,
+          "n_requests": 15,
+          "p95_latency_ms": 160.78,
+          "avg_latency_ms": 143.27,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 5,
+          "actual_rps": 5.04,
+          "n_requests": 25,
+          "p95_latency_ms": 166.45,
+          "avg_latency_ms": 147.02,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 7,
+          "actual_rps": 7.0,
+          "n_requests": 35,
+          "p95_latency_ms": 154.81,
+          "avg_latency_ms": 142.17,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 9,
+          "actual_rps": 8.95,
+          "n_requests": 45,
+          "p95_latency_ms": 156.84,
+          "avg_latency_ms": 140.92,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 11,
+          "actual_rps": 10.9,
+          "n_requests": 55,
+          "p95_latency_ms": 159.4,
+          "avg_latency_ms": 142.22,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 13,
+          "actual_rps": 12.84,
+          "n_requests": 65,
+          "p95_latency_ms": 162.15,
+          "avg_latency_ms": 144.27,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 15,
+          "actual_rps": 14.77,
+          "n_requests": 75,
+          "p95_latency_ms": 153.68,
+          "avg_latency_ms": 141.28,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 17,
+          "actual_rps": 15.59,
+          "n_requests": 85,
+          "p95_latency_ms": 485.41,
+          "avg_latency_ms": 319.3,
+          "error_count": 0,
+          "error_pct": 0.0
+        }
+      ]
+    },
+    {
+      "n_workers": 4,
+      "load": 7,
+      "ms_per_load": 18.0,
+      "saturation_rps": 31.02,
+      "saturation_p95_threshold_ms": 300.0,
+      "saturation_error_threshold_pct": 1.0,
+      "ramp_table": [
+        {
+          "target_rps": 1,
+          "actual_rps": 1.09,
+          "n_requests": 10,
+          "p95_latency_ms": 158.96,
+          "avg_latency_ms": 144.38,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 3,
+          "actual_rps": 3.12,
+          "n_requests": 15,
+          "p95_latency_ms": 166.38,
+          "avg_latency_ms": 147.59,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 5,
+          "actual_rps": 5.04,
+          "n_requests": 25,
+          "p95_latency_ms": 156.02,
+          "avg_latency_ms": 141.2,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 7,
+          "actual_rps": 6.99,
+          "n_requests": 35,
+          "p95_latency_ms": 158.6,
+          "avg_latency_ms": 143.4,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 9,
+          "actual_rps": 8.95,
+          "n_requests": 45,
+          "p95_latency_ms": 156.95,
+          "avg_latency_ms": 141.29,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 11,
+          "actual_rps": 10.86,
+          "n_requests": 55,
+          "p95_latency_ms": 157.05,
+          "avg_latency_ms": 142.66,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 13,
+          "actual_rps": 12.8,
+          "n_requests": 65,
+          "p95_latency_ms": 159.14,
+          "avg_latency_ms": 141.36,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 15,
+          "actual_rps": 14.78,
+          "n_requests": 75,
+          "p95_latency_ms": 155.02,
+          "avg_latency_ms": 139.11,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 17,
+          "actual_rps": 16.74,
+          "n_requests": 85,
+          "p95_latency_ms": 162.72,
+          "avg_latency_ms": 142.6,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 19,
+          "actual_rps": 18.69,
+          "n_requests": 95,
+          "p95_latency_ms": 157.4,
+          "avg_latency_ms": 141.14,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 21,
+          "actual_rps": 20.63,
+          "n_requests": 105,
+          "p95_latency_ms": 155.93,
+          "avg_latency_ms": 140.6,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 23,
+          "actual_rps": 22.48,
+          "n_requests": 115,
+          "p95_latency_ms": 152.98,
+          "avg_latency_ms": 137.25,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 25,
+          "actual_rps": 24.47,
+          "n_requests": 125,
+          "p95_latency_ms": 156.8,
+          "avg_latency_ms": 141.1,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 27,
+          "actual_rps": 26.47,
+          "n_requests": 135,
+          "p95_latency_ms": 153.98,
+          "avg_latency_ms": 138.43,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 29,
+          "actual_rps": 28.42,
+          "n_requests": 145,
+          "p95_latency_ms": 156.86,
+          "avg_latency_ms": 140.23,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 31,
+          "actual_rps": 30.28,
+          "n_requests": 155,
+          "p95_latency_ms": 155.82,
+          "avg_latency_ms": 146.66,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 33,
+          "actual_rps": 31.02,
+          "n_requests": 165,
+          "p95_latency_ms": 341.67,
+          "avg_latency_ms": 247.03,
+          "error_count": 0,
+          "error_pct": 0.0
+        }
+      ]
+    },
+    {
+      "n_workers": 8,
+      "load": 7,
+      "ms_per_load": 18.0,
+      "saturation_rps": 57.86,
+      "saturation_p95_threshold_ms": 300.0,
+      "saturation_error_threshold_pct": 1.0,
+      "ramp_table": [
+        {
+          "target_rps": 1,
+          "actual_rps": 1.09,
+          "n_requests": 10,
+          "p95_latency_ms": 157.46,
+          "avg_latency_ms": 143.95,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 3,
+          "actual_rps": 3.11,
+          "n_requests": 15,
+          "p95_latency_ms": 157.42,
+          "avg_latency_ms": 143.99,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 5,
+          "actual_rps": 5.05,
+          "n_requests": 25,
+          "p95_latency_ms": 157.28,
+          "avg_latency_ms": 141.67,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 7,
+          "actual_rps": 7.01,
+          "n_requests": 35,
+          "p95_latency_ms": 156.5,
+          "avg_latency_ms": 139.6,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 9,
+          "actual_rps": 8.94,
+          "n_requests": 45,
+          "p95_latency_ms": 154.15,
+          "avg_latency_ms": 142.35,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 11,
+          "actual_rps": 10.9,
+          "n_requests": 55,
+          "p95_latency_ms": 158.07,
+          "avg_latency_ms": 141.51,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 13,
+          "actual_rps": 12.84,
+          "n_requests": 65,
+          "p95_latency_ms": 156.46,
+          "avg_latency_ms": 140.99,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 15,
+          "actual_rps": 14.78,
+          "n_requests": 75,
+          "p95_latency_ms": 155.09,
+          "avg_latency_ms": 140.61,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 17,
+          "actual_rps": 16.74,
+          "n_requests": 85,
+          "p95_latency_ms": 157.31,
+          "avg_latency_ms": 140.59,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 19,
+          "actual_rps": 18.61,
+          "n_requests": 95,
+          "p95_latency_ms": 155.89,
+          "avg_latency_ms": 140.43,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 21,
+          "actual_rps": 20.63,
+          "n_requests": 105,
+          "p95_latency_ms": 153.86,
+          "avg_latency_ms": 139.34,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 23,
+          "actual_rps": 22.57,
+          "n_requests": 115,
+          "p95_latency_ms": 152.03,
+          "avg_latency_ms": 136.73,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 25,
+          "actual_rps": 24.43,
+          "n_requests": 125,
+          "p95_latency_ms": 157.25,
+          "avg_latency_ms": 141.01,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 27,
+          "actual_rps": 26.47,
+          "n_requests": 135,
+          "p95_latency_ms": 153.94,
+          "avg_latency_ms": 138.42,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 29,
+          "actual_rps": 28.32,
+          "n_requests": 145,
+          "p95_latency_ms": 160.44,
+          "avg_latency_ms": 140.69,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 31,
+          "actual_rps": 30.35,
+          "n_requests": 155,
+          "p95_latency_ms": 156.63,
+          "avg_latency_ms": 139.75,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 33,
+          "actual_rps": 32.3,
+          "n_requests": 165,
+          "p95_latency_ms": 192.87,
+          "avg_latency_ms": 145.31,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 35,
+          "actual_rps": 34.23,
+          "n_requests": 175,
+          "p95_latency_ms": 164.54,
+          "avg_latency_ms": 144.76,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 37,
+          "actual_rps": 36.18,
+          "n_requests": 185,
+          "p95_latency_ms": 182.08,
+          "avg_latency_ms": 148.99,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 39,
+          "actual_rps": 38.02,
+          "n_requests": 195,
+          "p95_latency_ms": 208.89,
+          "avg_latency_ms": 150.47,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 41,
+          "actual_rps": 40.02,
+          "n_requests": 205,
+          "p95_latency_ms": 203.19,
+          "avg_latency_ms": 154.15,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 43,
+          "actual_rps": 41.97,
+          "n_requests": 215,
+          "p95_latency_ms": 232.23,
+          "avg_latency_ms": 158.73,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 45,
+          "actual_rps": 43.96,
+          "n_requests": 225,
+          "p95_latency_ms": 204.48,
+          "avg_latency_ms": 153.53,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 47,
+          "actual_rps": 45.9,
+          "n_requests": 235,
+          "p95_latency_ms": 217.25,
+          "avg_latency_ms": 156.9,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 49,
+          "actual_rps": 47.63,
+          "n_requests": 245,
+          "p95_latency_ms": 212.19,
+          "avg_latency_ms": 157.09,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 51,
+          "actual_rps": 49.78,
+          "n_requests": 255,
+          "p95_latency_ms": 241.68,
+          "avg_latency_ms": 164.33,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 53,
+          "actual_rps": 51.74,
+          "n_requests": 265,
+          "p95_latency_ms": 230.25,
+          "avg_latency_ms": 161.08,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 55,
+          "actual_rps": 53.59,
+          "n_requests": 275,
+          "p95_latency_ms": 234.13,
+          "avg_latency_ms": 168.31,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 57,
+          "actual_rps": 55.51,
+          "n_requests": 285,
+          "p95_latency_ms": 209.72,
+          "avg_latency_ms": 158.64,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 59,
+          "actual_rps": 57.56,
+          "n_requests": 295,
+          "p95_latency_ms": 188.87,
+          "avg_latency_ms": 153.89,
+          "error_count": 0,
+          "error_pct": 0.0
+        },
+        {
+          "target_rps": 61,
+          "actual_rps": 57.86,
+          "n_requests": 305,
+          "p95_latency_ms": 312.05,
+          "avg_latency_ms": 190.72,
+          "error_count": 0,
+          "error_pct": 0.0
+        }
+      ]
+    }
+  ]
+}

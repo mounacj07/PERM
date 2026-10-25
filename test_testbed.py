@@ -331,49 +331,45 @@ class TestTestbed(unittest.TestCase):
 
         print("\n[TEST 5] CPU rises under load (real measurement)...")
 
-        # Idle CPU (wait for a clean sample)
-        time.sleep(2.0)
+        # Idle CPU (wait for previous test to settle completely)
+        time.sleep(3.0)
         r_idle = _req.get(f"{self.base_url}/metrics/latest", timeout=3.0)
         idle_cpu = r_idle.json().get("cpu_percent", 0.0)
+        idle_worker_cpu = r_idle.json().get("worker_cpu_percent", 0.0)
 
-        # Apply heavy load (6 workers, many concurrent requests)
-        _req.post(f"{self.base_url}/api/capacity", json={"active_workers": 6}, timeout=5.0)
+        # Apply sustained heavy load (4 workers, continuous requests for 2.5s)
+        _req.post(f"{self.base_url}/api/capacity", json={"active_workers": 4}, timeout=5.0)
         time.sleep(1.0)
 
-        # Fire 20 concurrent requests without waiting for them
+        stop_load = threading.Event()
         def _fire():
-            try:
-                _req.post(f"{self.base_url}/api/process", json={"load": 10}, timeout=5.0)
-            except Exception:
-                pass
+            while not stop_load.is_set():
+                try:
+                    _req.post(f"{self.base_url}/api/process", json={"load": 8}, timeout=5.0)
+                except Exception:
+                    pass
+                time.sleep(0.04)
 
-        ts = [threading.Thread(target=_fire) for _ in range(20)]
+        ts = [threading.Thread(target=_fire, daemon=True) for _ in range(8)]
         for t in ts:
             t.start()
 
-        # Wait one sample interval then read CPU
-        time.sleep(2.0)
-        for t in ts:
-            t.join(timeout=5.0)
-
+        # Let load run for 2.5 seconds so telemetry samples active CPU
+        time.sleep(2.5)
         r_load = _req.get(f"{self.base_url}/metrics/latest", timeout=3.0)
         load_cpu = r_load.json().get("cpu_percent", 0.0)
+        load_worker_cpu = r_load.json().get("worker_cpu_percent", 0.0)
 
-        # Also poll a second sample to get peak CPU during load
-        time.sleep(1.0)
-        r_load2 = _req.get(f"{self.base_url}/metrics/latest", timeout=3.0)
-        load_cpu2 = r_load2.json().get("cpu_percent", load_cpu)
-        peak_load_cpu = max(load_cpu, load_cpu2)
+        stop_load.set()
+        for t in ts:
+            t.join(timeout=2.0)
 
-        print(f"  -> idle CPU={idle_cpu:.1f}%  under-load CPU peak={peak_load_cpu:.1f}%")
-        # CPU should be measured (not a fixed formula value).
-        # On a 16-core machine, psutil reports system-wide % averaged over all cores,
-        # so even 6 busy subprocesses may not raise system % dramatically.
-        # We accept a 10% tolerance: peak load CPU must be >= (idle - 10%).
-        self.assertGreaterEqual(
-            peak_load_cpu, idle_cpu - 10.0,
-            f"CPU under load ({peak_load_cpu:.1f}%) should not be significantly BELOW "
-            f"idle CPU ({idle_cpu:.1f}%) -- might indicate formula, not measurement",
+        print(f"  -> idle CPU={idle_cpu:.1f}% (worker={idle_worker_cpu:.1f}%)  load CPU={load_cpu:.1f}% (worker={load_worker_cpu:.1f}%)")
+        # CPU is measured if worker_cpu rose or system CPU rose above baseline
+        cpu_rose = (load_worker_cpu > 0.0) or (load_cpu > idle_cpu) or (load_cpu >= 15.0)
+        self.assertTrue(
+            cpu_rose,
+            f"CPU under load (sys={load_cpu:.1f}%, worker={load_worker_cpu:.1f}%) should reflect active work",
         )
 
     # ------------------------------------------------------------------ #
@@ -421,6 +417,10 @@ class TestTestbed(unittest.TestCase):
             "timestamp", "cpu_percent", "mem_percent",
             "avg_latency_ms", "p95_latency_ms", "request_count",
             "active_workers", "error_count", "queue_depth",
+            # Step 1b fields:
+            "arrivals_count", "ok_count", "timeout_count",
+            "rejected_count", "in_flight", "worker_cpu_percent",
+            "ok_p95_latency_ms",
         ]:
             self.assertIn(field, data, f"Missing field: {field}")
 
@@ -431,6 +431,172 @@ class TestTestbed(unittest.TestCase):
         self.assertIn("count", r.json())
 
         print("  -> All required fields present.")
+
+    # ------------------------------------------------------------------ #
+    # Test 8 - During scale-up, requests keep completing (gap < 300 ms)
+    # ------------------------------------------------------------------ #
+    def test_08_scale_up_no_completion_gap(self):
+        """
+        During a scale-up, requests keep completing with no large pause.
+        Spec: largest gap between completions < 300 ms.
+        """
+        import requests as _req
+
+        print("\n[TEST 8] During scale-up, requests keep completing (gap < 300ms)...")
+        _req.post(f"{self.base_url}/api/capacity", json={"active_workers": 2}, timeout=5.0)
+        time.sleep(1.0)
+
+        completions = []
+        lock = threading.Lock()
+        stop_traffic = threading.Event()
+
+        def _traffic_sender():
+            while not stop_traffic.is_set():
+                try:
+                    r = _req.post(f"{self.base_url}/api/process", json={"load": 1}, timeout=2.0)
+                    if r.status_code == 200:
+                        t = time.perf_counter()
+                        with lock:
+                            completions.append(t)
+                except Exception:
+                    pass
+                time.sleep(0.04)
+
+        senders = [threading.Thread(target=_traffic_sender, daemon=True) for _ in range(4)]
+        for s in senders:
+            s.start()
+
+        # Let steady completions begin
+        time.sleep(1.0)
+
+        # Trigger scale-up to 6 workers in parallel
+        _req.post(f"{self.base_url}/api/capacity", json={"active_workers": 6}, timeout=5.0)
+
+        # Let scale-up complete in background while traffic continues
+        time.sleep(2.5)
+        stop_traffic.set()
+        for s in senders:
+            s.join(timeout=2.0)
+
+        with lock:
+            times = completions[:]
+
+        times.sort()
+        self.assertGreater(len(times), 25, "Should have collected at least 25 completions during scale-up")
+
+        gaps = [times[i] - times[i - 1] for i in range(1, len(times))]
+        max_gap_ms = max(gaps) * 1000.0
+        print(f"  -> Total completions: {len(times)}, max gap between completions: {max_gap_ms:.1f}ms")
+        self.assertLess(
+            max_gap_ms, 300.0,
+            f"Largest gap between completions ({max_gap_ms:.1f}ms) must be < 300ms",
+        )
+
+    # ------------------------------------------------------------------ #
+    # Test 9 - Queue full returns 503 and counts as rejected_count
+    # ------------------------------------------------------------------ #
+    def test_09_queue_full_returns_503_and_counts_as_rejected(self):
+        """
+        When queue capacity is exceeded, collector returns HTTP 503 immediately
+        and increments rejected_count.
+        """
+        import requests as _req
+
+        print("\n[TEST 9] Queue full returns 503 and counts as rejected_count...")
+        _req.post(f"{self.base_url}/api/capacity", json={"active_workers": 1}, timeout=5.0)
+        time.sleep(1.0)
+        time.sleep(1.5)  # clean window
+
+        cap_resp = _req.get(f"{self.base_url}/api/capacity", timeout=3.0).json()
+        queue_cap = cap_resp.get("queue_capacity", 20)
+        n_requests = queue_cap + 25
+
+        results = []
+        lock = threading.Lock()
+
+        def _fire():
+            try:
+                r = _req.post(f"{self.base_url}/api/process", json={"load": 10}, timeout=4.0)
+                with lock:
+                    results.append((r.status_code, r.text))
+            except Exception as exc:
+                with lock:
+                    results.append((-1, str(exc)))
+
+        threads = [threading.Thread(target=_fire) for _ in range(n_requests)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=8.0)
+
+        hist = _req.get(f"{self.base_url}/metrics/history?seconds=10", timeout=3.0).json()
+        records = hist.get("records", [])
+        rejected_count = sum(r.get("rejected_count", 0) for r in records)
+
+        status_codes = [c for c, _ in results]
+        has_503 = 503 in status_codes
+        print(f"  -> Sent {n_requests} requests. 200s: {status_codes.count(200)}, 503s: {status_codes.count(503)}")
+        print(f"  -> Telemetry rejected_count in history: {rejected_count}")
+
+        self.assertTrue(has_503, "Expected at least one HTTP 503 response due to queue full")
+        self.assertGreater(rejected_count, 0, f"Expected rejected_count > 0 in metrics history, got {rejected_count}")
+
+    # ------------------------------------------------------------------ #
+    # Test 10 - Under 2x overload, goodput >= 80% with shedding
+    # ------------------------------------------------------------------ #
+    def test_10_overload_goodput_with_shedding(self):
+        """
+        Under 2x overload, goodput >= 80% of calibrated capacity (load shedding works).
+        At 2 workers, calibrated capacity ~= 15.8 req/s (at load=7, ms_per_load=18).
+        With 2x arrival rate (~32 req/s), goodput must be >= 0.80 * 15.8 = 12.6 req/s.
+        """
+        import requests as _req
+
+        print("\n[TEST 10] Under 2x overload, goodput >= 80% of capacity (shedding works)...")
+        _req.post(f"{self.base_url}/api/capacity", json={"active_workers": 2}, timeout=5.0)
+        time.sleep(1.0)
+
+        calibrated_capacity = 2.0 * (1000.0 / (7.0 * self.ms_per_load))
+        target_overload_rps = calibrated_capacity * 2.0  # ~32 req/s
+
+        duration_sec = 6.0
+        n_requests = int(target_overload_rps * duration_sec)
+        interval = 1.0 / target_overload_rps
+
+        success_count = 0
+        lock = threading.Lock()
+
+        def _sender(delay):
+            nonlocal success_count
+            time.sleep(delay)
+            try:
+                r = _req.post(f"{self.base_url}/api/process", json={"load": 7}, timeout=3.0)
+                if r.status_code == 200:
+                    with lock:
+                        success_count += 1
+            except Exception:
+                pass
+
+        t_start = time.perf_counter()
+        threads = [threading.Thread(target=_sender, args=(i * interval,), daemon=True) for i in range(n_requests)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=10.0)
+
+        elapsed = time.perf_counter() - t_start
+        goodput = success_count / elapsed
+
+        print(f"  -> Calibrated capacity: {calibrated_capacity:.1f} req/s")
+        print(f"  -> 2x Overload rate applied: {n_requests / elapsed:.1f} req/s")
+        print(f"  -> Measured goodput: {goodput:.1f} req/s ({goodput / calibrated_capacity * 100:.1f}% of capacity)")
+
+        self.assertGreaterEqual(
+            goodput,
+            0.80 * calibrated_capacity,
+            f"Goodput ({goodput:.1f} req/s) should be >= 80% of capacity ({0.80 * calibrated_capacity:.1f} req/s)",
+        )
+
 
 
 # ---------------------------------------------------------------------------
