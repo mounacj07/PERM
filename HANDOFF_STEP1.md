@@ -1,5 +1,28 @@
 # PERM Step 1 Handoff: Real Process-Pool Testbed & Predictive Autoscaling Proof
 
+## CORRECTIONS (SUPERSEDED CLAIMS)
+
+> [!WARNING]
+> The claims below from the initial Step 1 handoff were inaccurate, unverified, or based on flawed test setups. They are marked **SUPERSEDED** and corrected with the measured facts:
+
+1. **Claim: "Predictive / proactive scaling forecasted load 30 s ahead"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: The acceptance run used 30 closed-loop concurrent clients that overloaded the collector from second 0 (not the Locust burst profile with calm prelude). The first scale-up occurred ~6 seconds after run start, reacting to immediate overload. A 30-second predictive forecast lead time was completely **UNPROVEN** in this run.
+
+2. **Claim: "-89% errors, -72% latency, +74% throughput"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: In Pass 1 (fixed 2 workers), 857 of 885 requests timed out (96.8% failure rate)—a catastrophic congestion-collapse baseline. The "-89% errors" and "-72% latency" figures were relative to a completely broken baseline. Furthermore, the claimed "+74% throughput" was actually measured system CPU percentage rise (25.1% to 43.6%), **not** application throughput (requests/second).
+
+3. **Claim: "Bounded queueing with HTTP 503 timeouts"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: The bounded queue (`QUEUE_CAPACITY`) did **not** exist in the Step 1 code; requests accumulated in an unbounded queue inside Python's `ProcessPoolExecutor`, causing head-of-line blocking and cascading timeouts instead of immediate 503 rejections.
+
+4. **Claim: "SLO met under PERM"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: Neither Pass 1 (fixed 2 workers) nor Pass 2 (PERM) met the target SLO threshold of $\text{p95} \le 300\text{ ms}$ in **any single second** of the run (Pass 2 p95 remained $> 1,000\text{ ms}$ throughout the overload).
+
+---
+
 ## Overview
 This document delivers **Step 1: Real Scaling & Testbed** for the PERM (Predictive Edge Resource Management) project. All formula-based simulations in `telemetry_collector.py` have been replaced with real OS worker processes (`multiprocessing` / `ProcessPoolExecutor`), real CPU-bound work loops, real measured latencies and CPU metrics from `psutil`, bounded queueing with HTTP 503 timeouts, dynamic pool resizing without request drops, and cold-start measurement.
 
@@ -77,7 +100,7 @@ Calibration was conducted with `load=7` and `MS_PER_LOAD=18.0 ms` (each request 
 
 ## 4. Acceptance Run: Before vs After Numbers
 
-A 60-second dual-pass evaluation was executed under heavy concurrent load (30 concurrent client threads, `load=8`). Telemetry was sampled every 1.0 second and saved to [step1_scaling_proof.csv](file:///c:/Users/mouna/OneDrive/Desktop/projects/perm/step1_scaling_proof.csv).
+A 60-second dual-pass evaluation was executed under heavy concurrent load (30 concurrent client threads, `load=8`). Telemetry was sampled every 1.0 second and saved to `step1_scaling_proof.csv`.
 
 | Metric | Pass 1: Capacity Fixed at 2 Workers | Pass 2: PERM Predictive Auto-Scaling | Improvement / Impact |
 |---|:---:|:---:|:---:|
@@ -105,7 +128,7 @@ Execution of `python -m pytest test_testbed.py -v --tb=short -s`:
 ```text
 ============================= test session starts =============================
 platform win32 -- Python 3.13.12, pytest-9.0.2, pluggy-1.6.0
-rootdir: c:\Users\mouna\OneDrive\Desktop\projects\perm
+rootdir: . (repo root)
 collected 12 items
 
 test_testbed.py::TestTestbed::test_01_idle_metrics 

@@ -268,9 +268,10 @@ def main():
         "load": args.load,
         "ms_per_load": float(os.environ.get("MS_PER_LOAD", "18")),
         "saturation_p95_threshold_ms": SATURATION_P95_MS,
-        "saturation_error_threshold_pct": SATURATION_ERROR_PCT,
         "cpu_count": cap_info.get("cpu_count", os.cpu_count() or 4),
+        "physical_cpu_count": cap_info.get("physical_cpu_count"),
         "pinning_used": cap_info.get("pinning_used"),
+        "reserved_physical_cores": cap_info.get("reserved_physical_cores"),
         "queue_capacity": cap_info.get("queue_capacity", int(os.environ.get("QUEUE_CAPACITY", "20"))),
         "results": results,
     }

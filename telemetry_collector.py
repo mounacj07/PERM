@@ -64,6 +64,7 @@ log = logging.getLogger("telemetry_collector")
 # ---------------------------------------------------------------------------
 MS_PER_LOAD: float = float(os.environ.get("MS_PER_LOAD", "18.0"))
 _cpu_count: int = os.cpu_count() or 4
+_physical_cores_count: int = psutil.cpu_count(logical=False) or 4
 MAX_WORKERS: int = min(int(os.environ.get("MAX_WORKERS", "8")), _cpu_count)
 REQUEST_TIMEOUT_SEC: float = float(os.environ.get("REQUEST_TIMEOUT_SEC", "2.0"))
 
@@ -71,18 +72,82 @@ REQUEST_TIMEOUT_SEC: float = float(os.environ.get("REQUEST_TIMEOUT_SEC", "2.0"))
 # At 2 workers and load=7 (126ms service time), 20 items / (2 / 0.126) ~= 1.26s < 2.0s
 QUEUE_CAPACITY: int = int(os.environ.get("QUEUE_CAPACITY", "20"))
 
-# Core affinity: leave at least 2 cores free for Flask and traffic generator
+
+def get_physical_core_map() -> List[List[int]]:
+    """
+    Returns a list of logical CPU id lists, where each entry represents one physical core.
+    Example on 8-core / 16-thread CPU: [[0, 1], [2, 3], [4, 5], ..., [14, 15]].
+    """
+    try:
+        if sys.platform == "win32":
+            import ctypes
+            class SYSTEM_LOGICAL_PROCESSOR_INFORMATION(ctypes.Structure):
+                _fields_ = [
+                    ('ProcessorMask', ctypes.c_size_t),
+                    ('Relationship', ctypes.c_uint),
+                    ('Reserved', ctypes.c_ulonglong * 2)
+                ]
+            buf_size = ctypes.c_ulong(0)
+            ctypes.windll.kernel32.GetLogicalProcessorInformation(None, ctypes.byref(buf_size))
+            n_entries = buf_size.value // ctypes.sizeof(SYSTEM_LOGICAL_PROCESSOR_INFORMATION)
+            buf = (SYSTEM_LOGICAL_PROCESSOR_INFORMATION * n_entries)()
+            ctypes.windll.kernel32.GetLogicalProcessorInformation(buf, ctypes.byref(buf_size))
+            cores = []
+            for item in buf:
+                if item.Relationship == 0:  # RelationProcessorCore
+                    cpus = [i for i in range(64) if (item.ProcessorMask & (1 << i))]
+                    cores.append(cpus)
+            if cores:
+                return sorted(cores, key=lambda c: c[0])
+    except Exception:
+        pass
+
+    n_phys = psutil.cpu_count(logical=False) or 4
+    n_log = psutil.cpu_count(logical=True) or n_phys
+    ratio = max(1, n_log // n_phys)
+    return [[i * ratio + j for j in range(ratio)] for i in range(n_phys)]
+
+
+_physical_core_map = get_physical_core_map()
+_physical_cores_count = len(_physical_core_map)
+
+# Keep 2 physical cores free for Flask, telemetry, and load generators
+if _physical_cores_count >= 3:
+    RESERVED_PHYSICAL_CORES = _physical_core_map[:2]
+    WORKER_PHYSICAL_CORES = _physical_core_map[2:]
+else:
+    RESERVED_PHYSICAL_CORES = []
+    WORKER_PHYSICAL_CORES = _physical_core_map
+
+# Avoid hyperthread siblings: primary logical CPU of each worker physical core
+PRIMARY_WORKER_CPUS = [c[0] for c in WORKER_PHYSICAL_CORES]
+SECONDARY_WORKER_CPUS = [c[1] for c in WORKER_PHYSICAL_CORES if len(c) > 1]
+WORKER_CORE_IDS_DEFAULT = PRIMARY_WORKER_CPUS + SECONDARY_WORKER_CPUS
+
 _WORKER_CORE_IDS_STR: str = os.environ.get("WORKER_CORE_IDS", "")
 if _WORKER_CORE_IDS_STR.strip():
     WORKER_CORE_IDS: Optional[List[int]] = [
         int(x) for x in _WORKER_CORE_IDS_STR.split(",") if x.strip()
     ]
 else:
-    if _cpu_count >= 4:
-        # Cores 0 and 1 left free; use cores 2..(2 + MAX_WORKERS - 1)
-        WORKER_CORE_IDS = list(range(2, min(_cpu_count, 2 + MAX_WORKERS)))
-    else:
-        WORKER_CORE_IDS = None
+    WORKER_CORE_IDS = WORKER_CORE_IDS_DEFAULT
+
+
+def get_worker_core_affinity(worker_idx: int) -> Optional[List[int]]:
+    """Pin one worker per PHYSICAL core (avoiding hyperthread siblings)."""
+    if _WORKER_CORE_IDS_STR.strip() and WORKER_CORE_IDS:
+        return [WORKER_CORE_IDS[worker_idx % len(WORKER_CORE_IDS)]]
+    if PRIMARY_WORKER_CPUS:
+        if worker_idx < len(PRIMARY_WORKER_CPUS):
+            # Dedicated physical core, no hyperthread sharing
+            return [PRIMARY_WORKER_CPUS[worker_idx]]
+        else:
+            # Overflow workers beyond available physical cores use secondary siblings
+            ov = worker_idx - len(PRIMARY_WORKER_CPUS)
+            if ov < len(SECONDARY_WORKER_CPUS):
+                return [SECONDARY_WORKER_CPUS[ov]]
+            return [PRIMARY_WORKER_CPUS[worker_idx % len(PRIMARY_WORKER_CPUS)]]
+    return None
 
 SAMPLE_INTERVAL_SEC: float = 1.0
 BUFFER_MAXLEN: int = 3600
@@ -202,12 +267,14 @@ class _WorkerHandle:
         proc: mp.Process,
         exit_event: mp.Event,
         ready_event: mp.Event,
+        core_affinity: Optional[List[int]] = None,
     ):
         self.worker_id = worker_id
         self.proc = proc
         self.exit_event = exit_event
         self.ready_event = ready_event
         self.ready = False
+        self.core_affinity = core_affinity
         self.ps_proc: Optional[psutil.Process] = None
 
     def get_psutil(self) -> Optional[psutil.Process]:
@@ -259,10 +326,11 @@ class _PoolManager:
 
     def _spawn_workers_sync(self, count: int) -> None:
         t0 = time.monotonic()
-        for _ in range(count):
+        for idx in range(count):
             wid = next(self._wid_counter)
             exit_ev = mp.Event()
             ready_ev = mp.Event()
+            affinity = get_worker_core_affinity(len(self._workers))
             p = mp.Process(
                 target=_worker_process_main,
                 args=(
@@ -274,12 +342,12 @@ class _PoolManager:
                     exit_ev,
                     ready_ev,
                     MS_PER_LOAD,
-                    WORKER_CORE_IDS,
+                    affinity,
                 ),
                 daemon=True,
             )
             p.start()
-            wh = _WorkerHandle(wid, p, exit_ev, ready_ev)
+            wh = _WorkerHandle(wid, p, exit_ev, ready_ev, core_affinity=affinity)
             wh.ready_event.wait(timeout=10.0)
             wh.ready = True
             wh.get_psutil()
@@ -392,10 +460,11 @@ class _PoolManager:
 
             t0 = time.monotonic()
             new_handles: List[_WorkerHandle] = []
-            for _ in range(needed):
+            for idx in range(needed):
                 wid = next(self._wid_counter)
                 exit_ev = mp.Event()
                 ready_ev = mp.Event()
+                affinity = get_worker_core_affinity(old_count + idx)
                 p = mp.Process(
                     target=_worker_process_main,
                     args=(
@@ -407,12 +476,12 @@ class _PoolManager:
                         exit_ev,
                         ready_ev,
                         MS_PER_LOAD,
-                        WORKER_CORE_IDS,
+                        affinity,
                     ),
                     daemon=True,
                 )
                 p.start()
-                new_handles.append(_WorkerHandle(wid, p, exit_ev, ready_ev))
+                new_handles.append(_WorkerHandle(wid, p, exit_ev, ready_ev, core_affinity=affinity))
 
             # Wait for processes to become ready without holding self._lock
             for wh in new_handles:
@@ -475,6 +544,15 @@ class _PoolManager:
     @property
     def scale_events(self) -> List[dict]:
         return list(self._scale_events)
+
+    @property
+    def pinning_summary(self) -> List[int]:
+        with self._lock:
+            pinned = []
+            for w in self._workers:
+                if w.core_affinity:
+                    pinned.extend(w.core_affinity)
+            return sorted(list(set(pinned))) if pinned else (WORKER_CORE_IDS or [])
 
     def get_worker_cpu_percent(self) -> float:
         """Measure CPU of worker processes normalized by system core count."""
@@ -690,11 +768,14 @@ def create_app() -> Flask:
 
     @app.route("/health", methods=["GET"])
     def health():
+        pins = _pool.pinning_summary if _pool else WORKER_CORE_IDS
         return jsonify({
             "status": "ok",
             "time": datetime.now(timezone.utc).isoformat(),
             "cpu_count": _cpu_count,
-            "pinning_used": WORKER_CORE_IDS,
+            "physical_cpu_count": _physical_cores_count,
+            "pinning_used": pins,
+            "reserved_physical_cores": RESERVED_PHYSICAL_CORES,
         })
 
     @app.route("/metrics/latest", methods=["GET"])
@@ -723,25 +804,31 @@ def create_app() -> Flask:
                     new_n = _pool.resize(target)
                 else:
                     new_n = target
+                pins = _pool.pinning_summary if _pool else WORKER_CORE_IDS
                 return jsonify({
                     "status": "updated",
                     "active_workers": new_n,
                     "last_scale_up_seconds": _pool.last_scale_up_seconds if _pool else 0.0,
                     "scale_events": _pool.scale_events if _pool else [],
                     "cpu_count": _cpu_count,
-                    "pinning_used": WORKER_CORE_IDS,
+                    "physical_cpu_count": _physical_cores_count,
+                    "pinning_used": pins,
+                    "reserved_physical_cores": RESERVED_PHYSICAL_CORES,
                     "queue_capacity": QUEUE_CAPACITY,
                 })
 
         workers = _pool.n_workers if _pool else 2
         last_scale = _pool.last_scale_up_seconds if _pool else 0.0
         events = _pool.scale_events if _pool else []
+        pins = _pool.pinning_summary if _pool else WORKER_CORE_IDS
         return jsonify({
             "active_workers": workers,
             "last_scale_up_seconds": last_scale,
             "scale_events": events,
             "cpu_count": _cpu_count,
-            "pinning_used": WORKER_CORE_IDS,
+            "physical_cpu_count": _physical_cores_count,
+            "pinning_used": pins,
+            "reserved_physical_cores": RESERVED_PHYSICAL_CORES,
             "queue_capacity": QUEUE_CAPACITY,
         })
 

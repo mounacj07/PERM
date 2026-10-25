@@ -1,5 +1,41 @@
 # PERM Step 1b Handoff: Testbed Rework & Fair Scaling Comparison Experiment
 
+## CORRECTIONS (SUPERSEDED CLAIMS)
+
+> [!WARNING]
+> Several claims made in the initial draft of this document were invalid, misleading, or contradicted by our own logged data. They are marked **SUPERSEDED** and corrected with the measured facts below:
+
+1. **Claim: "Fixed 2 Workers met the p95 <= 300 ms SLO throughout the run (121.3s)"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: `sec_p95_ok` and `peak_p95` in `telemetry_collector.py` only calculate percentiles over *successful* (HTTP 200) requests. Fixed 2 workers rejected or dropped 54.46% of all incoming requests via HTTP 503 load-shedding and queue overflows (`step1b_summary.json` field: `mode_aggregates.fixed_2.pct_ok.mean = 45.54`). Surviving requests took ~126 ms of service time, creating the illusion of SLO compliance. It did **not** meet the SLO; more than half the traffic was rejected.
+
+2. **Claim: "PERM is 26.6% cheaper than reactive autoscaling"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: Cost (worker-seconds) can only be compared fairly when systems deliver equivalent SLO outcomes. PERM achieved **85.69% OK** (`mode_aggregates.perm.pct_ok.mean`), shedding 14.31% of requests, while the reactive autoscaler delivered **98.41% OK** (`mode_aggregates.reactive.pct_ok.mean`). PERM used fewer worker-seconds (533.3 vs 726.7) primarily because it failed to scale up to 8 workers fast enough to serve the burst, not because of superior steady-state efficiency.
+
+3. **Claim: "PERM triggered scaling 25.5 s ahead of time / proactivity proven"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: In `step1b_summary.json`, every single logged alert in `perm_scale_up_alerts` has `is_before_burst: false`. Alerts fired **7.84s to 18.38s AFTER the burst started** (`relative_to_burst_start_sec: 7.84, 12.89, 8.21, 18.38`). The `lead_time_sec: 25.5` in `alerts_log.csv` is a static theoretical horizon calculation ($30\text{ s} \times 0.85$), **not** a measured real-world advance warning before the burst. The burst arrived before any alert was emitted.
+
+4. **Claim: "Current metric was healthy (126 ms, 49% CPU) when alert fired"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: 126 ms is simply the raw CPU service time ($7 \times 18\text{ ms}$) for a single request with zero queue wait. Furthermore, the 49.3% CPU measurement is system-wide across all 16 cores. With only 2-4 active workers, 49.3% system CPU represents near-total saturation of the allotted worker cores. The system was already experiencing congestion, not in a calm "healthy" state.
+
+5. **Claim: "All tests pass / Timeout 3.0 s"**
+   - **Status**: **SUPERSEDED**
+   - **Measured Fact**: `test_07_run_all_starts_services` was explicitly **SKIPPED** in the test run (`SKIP_RUN_ALL_TEST=1`). The request timeout was documented in the handoff text as 3.0 s, but the actual default in `telemetry_collector.py` is `REQUEST_TIMEOUT_SEC = 2.0 s`.
+
+---
+
+## Strict Reporting Rules for Future Evaluations
+1. **Provenance for Every Number**: Every numeric claim must explicitly state the source file and JSON/CSV field name.
+2. **Contradiction Auditing**: Before drawing a conclusion, cross-reference summary JSON fields (e.g. `is_before_burst`, `pct_ok`, `error_count`) and explicitly report any contradiction.
+3. **Strict Definition of "Predictive"**: Never label a scale-up "predictive" or "proactive" unless the measured alert timestamp occurred strictly before the burst arrival (`relative_to_burst_start_sec < 0`).
+4. **Valid Cost Comparisons**: Only compare resource cost (worker-seconds) when comparing modes that achieve equivalent SLO satisfaction and request success rates ($\ge 98\%$).
+5. **Report Losses Plainly**: Prominently document where PERM fails or performs worse than reactive/static modes.
+
+---
+
 ## Overview
 This document delivers **PERM Step 1b**: fixing the testbed architecture and evaluating it with a rigorous, fair comparison experiment across 4 scaling modes under identical open-loop Poisson traffic bursts.
 
@@ -70,17 +106,20 @@ Results are saved to `step1b_comparison.csv` and `step1b_summary.json`.
 
 ## 3. Calibration Table (Saturation Limits)
 
-Measured on the 16-core system with `MS_PER_LOAD = 18.0 ms` and `load = 7` (126 ms CPU service time per request):
+Measured with physical-core pinning active on AMD Ryzen 7 7730U (`physical_cpu_count: 8`, `cpu_count: 16`), with `MS_PER_LOAD = 18.0 ms` and `load = 7` (126 ms CPU service time per request). Data from `testbed_calibration.json` (`calibration_time: 2026-10-25T12:21:50Z`):
 
-| Worker Count | Saturation req/s | Theoretical Max (N * 1000 / 126) | Efficiency |
-|:---:|:---:|:---:|:---:|
-| **1 worker** | **7.9 req/s** | 7.94 req/s | 99.5% |
-| **2 workers** | **15.6 req/s** | 15.87 req/s | 98.3% |
-| **4 workers** | **31.0 req/s** | 31.75 req/s | 97.6% |
-| **8 workers** | **57.9 req/s** | 63.49 req/s | 91.2% |
+- **Physical Cores Reserved for Flask / Load Generator**: Physical Core 0 (logical CPUs `[0, 1]`) and Physical Core 1 (logical CPUs `[2, 3]`).
+- **Physical Cores Assigned to Workers**: One worker per physical core (primary logical CPUs `[4, 6, 8, 10, 12, 14]`, overflow to siblings `[5, 7]` at 8 workers).
 
-*Queue capacity: 20 items (max wait time at 2 workers: $20 / 15.87 \approx 1.26\text{ s} < 2.0\text{ s}$ timeout).*  
-*Pinning used: Cores 2, 3, 4, 5, 6, 7, 8, 9 (Cores 0 and 1 left unpinned).*
+| Worker Count | Saturation req/s (`results[].saturation_rps`) | Theoretical Max ($N \times 1000 / 126$) | Measured Efficiency | Pinning Used (`pinning_used`) |
+|:---:|:---:|:---:|:---:|:---:|
+| **1 worker** | **7.89 req/s** | 7.94 req/s | 99.4% | `[4]` (Physical Core 2) |
+| **2 workers** | **15.6 req/s** | 15.87 req/s | 98.3% | `[4, 6]` (Physical Cores 2, 3) |
+| **4 workers** | **31.0 req/s** | 31.75 req/s | 97.6% | `[4, 6, 8, 10]` (Physical Cores 2, 3, 4, 5) |
+| **8 workers** | **61.7 req/s** | 63.49 req/s | 97.2% | `[4, 6, 8, 10, 12, 14, 5, 7]` (Physical Cores 2..7 + siblings) |
+
+*Saturation criteria: p95 latency $> 300\text{ ms}$ or error rate $> 1.0\%$.*  
+*Queue capacity: `queue_capacity: 20` (max queue wait at 2 workers: $20 / 15.87 \approx 1.26\text{ s} < 2.0\text{ s}$ timeout).*
 
 ---
 
@@ -157,5 +196,19 @@ test_testbed.py::TestFlaskClient::test_process_returns_processed PASSED         
    - Worker processes are pinned to cores `[2, 3, 4, 5, 6, 7, 8, 9]`.
 3. **Queue Sizing & Shedding**:
    - `QUEUE_CAPACITY` default is 20.
-   - Under saturation, queue wait is bounded ($20 / 15.87 \approx 1.26\text{ s}$ at 2 workers), strictly below the `REQUEST_TIMEOUT_SEC` (3.0s), allowing load shedding to reject surplus traffic immediately via HTTP 503 rather than holding connections until client timeout.
+   - Under saturation, queue wait is bounded ($20 / 15.87 \approx 1.26\text{ s}$ at 2 workers), strictly below the `REQUEST_TIMEOUT_SEC` (default 2.0s in code, overridable to 3.0s), allowing load shedding to reject surplus traffic immediately via HTTP 503 rather than holding connections until client timeout.
 4. **No Docker Requirement**: All microservices run natively via standard Python and communicate over HTTP loopback (`127.0.0.1:5000` through `5003`).
+
+---
+
+## 8. UNVERIFIED / NOT TESTED & PERM DEFICITS
+
+Where PERM Lost / Underperformed:
+1. **Request Success Deficit**: Under step burst traffic, PERM only served **85.69%** of requests (`mode_aggregates.perm.pct_ok.mean = 85.69`), failing 14.31% of requests. Both `fixed_8` (**100.0%**) and `reactive` (**98.41%**) significantly outperformed PERM in throughput and reliability.
+2. **Delayed Scale-Up**: PERM scaled up **9.79 seconds AFTER burst arrival** (`mode_aggregates.perm.sec_to_first_scale_up.mean = 9.79`). It was slower to respond than the simple reactive autoscaler, which scaled up in **0.82 seconds** (`mode_aggregates.reactive.sec_to_first_scale_up.mean = 0.82`).
+3. **Advance Proactivity is Unverified**: Zero alerts occurred prior to the onset of the traffic burst (`is_before_burst: false` across all runs). The machine learning forecast pipeline currently only triggers once congestion has already entered the 10-second history window. Advance predictive scaling remains **UNPROVEN** under sharp step bursts.
+
+Unverified / Not Tested in this Step:
+1. **End-to-End run_all.py with Dashboard**: `test_07_run_all_starts_services` was skipped (`SKIP_RUN_ALL_TEST=1`) to avoid port collisions during unit testing; multi-service coordination was tested directly in `compare_scaling.py`.
+2. **Ramp Traffic Profile**: The 4-mode comparison was run under the `step` profile; the `ramp` profile was validated in `burst_test.py` scheduling tests but has not yet been benchmarked across all 4 modes.
+3. **Linux CPU Affinity**: Tests and benchmarks were executed on Windows; `psutil.Process().cpu_affinity()` on Linux kernel cgroups was not directly verified.
