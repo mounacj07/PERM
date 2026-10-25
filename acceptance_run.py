@@ -1,5 +1,5 @@
 """
-PERM – acceptance_run.py
+PERM ? acceptance_run.py
 =========================
 Runs the 60-second fast-demo acceptance test:
   - PASS 1: capacity fixed at 2 workers  (PERM_AUTO_SCALE=0)
@@ -8,8 +8,8 @@ Runs the 60-second fast-demo acceptance test:
 Saves per-second telemetry rows to step1_scaling_proof.csv.
 
 Requirements:
-  • All PERM services running: python run_all.py
-  • This script is separate from Locust; it drives load internally using
+  ? All PERM services running: python run_all.py
+  ? This script is separate from Locust; it drives load internally using
     threads and reads /metrics/history from the collector.
 
 Usage:
@@ -129,6 +129,8 @@ def _collect_telemetry(collector_url: str, duration_sec: int,
                         for field in CSV_FIELDS[2:]:
                             row[field] = rec.get(field, "")
                         rows.append(row)
+                        if int(elapsed) % 10 == 0 and int(elapsed) > 0:
+                            print(f"    [{int(elapsed)}s/{duration_sec}s] rows={len(rows)} workers={rec.get('active_workers')} p95={rec.get('p95_latency_ms')}ms errs={rec.get('error_count')}", flush=True)
         except Exception:
             pass
 
@@ -173,7 +175,7 @@ def run_pass(
     for t in threads:
         t.join(timeout=5.0)
 
-    print(f"  [✓] Collected {len(rows)} telemetry rows")
+    print(f"  [OK] Collected {len(rows)} telemetry rows")
     if rows:
         p95_vals = [r.get("p95_latency_ms", 0) for r in rows
                     if isinstance(r.get("p95_latency_ms"), (int, float))]
@@ -201,11 +203,11 @@ def main():
     args = parser.parse_args()
 
     # Health checks
-    print("Checking services…")
+    print("Checking services?")
     if not _wait_healthy(args.collector, timeout=10.0):
-        print(f"[✗] Collector not healthy at {args.collector}")
+        print(f"[OK] Collector not healthy at {args.collector}")
         sys.exit(1)
-    print(f"  [✓] Collector at {args.collector}")
+    print(f"  [OK] Collector at {args.collector}")
 
     try:
         r = requests.get(f"{args.remediation}/health", timeout=3.0)
@@ -233,7 +235,7 @@ def main():
     all_rows.extend(rows1)
 
     # Brief cooldown between passes
-    print("\n[*] Cooldown 10s before pass 2…")
+    print("\n[*] Cooldown 10s before pass 2?")
     _set_capacity(args.collector, 2)  # reset to baseline
     time.sleep(10)
 
@@ -257,7 +259,7 @@ def main():
         for row in all_rows:
             writer.writerow(row)
 
-    print(f"\n[✓] Results saved to {OUTPUT_PATH}")
+    print(f"\n[OK] Results saved to {OUTPUT_PATH}")
 
     # Summary table
     def _summarize(rows: List[dict], label: str):
@@ -278,8 +280,8 @@ def main():
     print("\n" + "="*60)
     print("ACCEPTANCE SUMMARY")
     print("="*60)
-    _summarize(rows1, "Pass 1 – Fixed 2 workers")
-    _summarize(rows2, "Pass 2 – Auto-scaling")
+    _summarize(rows1, "Pass 1 ? Fixed 2 workers")
+    _summarize(rows2, "Pass 2 ? Auto-scaling")
     print("="*60)
 
 

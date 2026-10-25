@@ -1,5 +1,5 @@
 """
-PERM – calibrate_testbed.py
+PERM - calibrate_testbed.py
 ============================
 Finds the saturation point (req/s where p95 latency exceeds 300 ms OR
 error rate exceeds 1 %) for worker counts 1, 2, 4, 8 by ramping request
@@ -20,16 +20,16 @@ MS_PER_LOAD = 18 ms/unit  (default in telemetry_collector.py)
 
 With load=8 (mid-burst):
   Each request does 8 * 18 = 144 ms of CPU work.
-  Saturation for N workers ~ N * (1000 / 144) ≈ N * 6.9 req/s.
+  Saturation for N workers ~ N * (1000 / 144) ~= N * 6.9 req/s.
 
-  N=1  →  ~7   req/s saturation
-  N=2  →  ~14  req/s saturation
-  N=4  →  ~28  req/s saturation
-  N=8  →  ~55  req/s saturation
+  N=1  ->  ~7   req/s saturation
+  N=2  ->  ~14  req/s saturation
+  N=4  ->  ~28  req/s saturation
+  N=8  ->  ~55  req/s saturation
 
-Locust burst stage: 90 users × 1/(0.2–1.0)s wait ≈ 90–450 req/s *attempted*,
-but with load=7..10 and 2 workers → heavy queuing/503s expected,
-and with 6-8 workers → latency drops below 300ms.
+Locust burst stage: 90 users x 1/(0.2-1.0)s wait ~= 90-450 req/s *attempted*,
+but with load=7..10 and 2 workers -> heavy queuing/503s expected,
+and with 6-8 workers -> latency drops below 300ms.
 """
 
 from __future__ import annotations
@@ -50,7 +50,7 @@ CALIBRATION_OUTPUT = os.path.join(os.path.dirname(__file__), "testbed_calibratio
 
 # Ramp settings
 RAMP_START_RPS = 1
-RAMP_MAX_RPS = 120         # upper bound – stopped when saturation found
+RAMP_MAX_RPS = 120         # upper bound - stopped when saturation found
 RAMP_STEP_RPS = 2          # increase per step
 RAMP_STEP_DURATION_SEC = 5 # seconds per ramp step
 MIN_REQUESTS_PER_STEP = 10  # skip step if too few samples
@@ -166,7 +166,7 @@ def calibrate_workers(
     load: int,
 ) -> Dict:
     """Ramp rate until saturation for a fixed number of workers."""
-    print(f"\n  [workers={n_workers}] Setting pool size…")
+    print(f"\n  [workers={n_workers}] Setting pool size...")
     _set_workers(base_url, n_workers)
     time.sleep(2.0)  # let pool settle
     _wait_for_pool(base_url, n_workers)
@@ -176,7 +176,7 @@ def calibrate_workers(
 
     rps = RAMP_START_RPS
     while rps <= RAMP_MAX_RPS:
-        print(f"    rate={rps:.0f} rps … ", end="", flush=True)
+        print(f"    rate={rps:.0f} rps ... ", end="", flush=True)
         result = _measure_at_rate(base_url, rps, RAMP_STEP_DURATION_SEC, load)
         ramp_table.append(result)
         print(
@@ -238,15 +238,15 @@ def main():
     try:
         r = requests.get(f"{base_url}/health", timeout=3.0)
         assert r.status_code == 200
-        print(f"[✓] Collector healthy at {base_url}")
+        print(f"[[OK]] Collector healthy at {base_url}")
     except Exception as exc:
-        print(f"[✗] Cannot reach collector at {base_url}: {exc}")
+        print(f"[[FAIL]] Cannot reach collector at {base_url}: {exc}")
         sys.exit(1)
 
     print(f"\nCalibration parameters:")
     print(f"  load value        = {args.load}")
     print(f"  MS_PER_LOAD       = {os.environ.get('MS_PER_LOAD', '18')} ms")
-    print(f"  saturation p95 ≥  {SATURATION_P95_MS} ms  OR  error% ≥ {SATURATION_ERROR_PCT}%")
+    print(f"  saturation p95 >=  {SATURATION_P95_MS} ms  OR  error% >= {SATURATION_ERROR_PCT}%")
     print(f"  worker counts     = {worker_counts}")
     print(f"  ramp step         = {RAMP_STEP_RPS} rps / {RAMP_STEP_DURATION_SEC}s")
 
@@ -267,7 +267,7 @@ def main():
 
     with open(CALIBRATION_OUTPUT, "w") as f:
         json.dump(output, f, indent=2)
-    print(f"\n[✓] Results saved to {CALIBRATION_OUTPUT}")
+    print(f"\n[[OK]] Results saved to {CALIBRATION_OUTPUT}")
 
     # Print summary table
     print("\n" + "=" * 60)

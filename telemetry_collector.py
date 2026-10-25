@@ -1,6 +1,6 @@
 """
 PERM - Predictive Edge Resource Management
-Telemetry Collector  (Part B rewrite – real process pool, real measurements)
+Telemetry Collector  (Part B rewrite - real process pool, real measurements)
 
 Flask-based edge monitoring service that:
   1. Serves /api/process with REAL CPU-bound work executed by a pool of N
@@ -19,10 +19,10 @@ Flask-based edge monitoring service that:
         request_count, active_workers, error_count, queue_depth
 
 CONFIGURATION (env vars or defaults):
-    MS_PER_LOAD         – ms of busy-loop per unit of `load` (default 18)
-    MAX_WORKERS         – hard ceiling for pool size (default 8, capped at cpu_count)
-    REQUEST_TIMEOUT_SEC – per-request deadline in seconds (default 2.0)
-    WORKER_CORE_IDS     – comma-separated core indices to pin workers to
+    MS_PER_LOAD         - ms of busy-loop per unit of `load` (default 18)
+    MAX_WORKERS         - hard ceiling for pool size (default 8, capped at cpu_count)
+    REQUEST_TIMEOUT_SEC - per-request deadline in seconds (default 2.0)
+    WORKER_CORE_IDS     - comma-separated core indices to pin workers to
                           (e.g. "4,5,6,7").  Empty = no pinning (default).
 
 Run:
@@ -111,7 +111,7 @@ CSV_FIELDS = [
 def _cpu_work(load: int, ms_per_load: float) -> None:
     """
     Busy-loop for  load * ms_per_load  milliseconds.
-    Pure CPU work – no IO, no GIL – so it truly saturates a core.
+    Pure CPU work - no IO, no GIL - so it truly saturates a core.
     """
     deadline = time.perf_counter() + (load * ms_per_load) / 1000.0
     while time.perf_counter() < deadline:
@@ -229,7 +229,6 @@ _pool: Optional[_PoolManager] = None
 def _record_request(latency_ms: float, is_error: bool) -> None:
     global _window_errors
     with _state_lock:
-        _window_requests_ref = globals()
         _window_latencies.append(latency_ms)
         if is_error:
             _window_errors += 1
@@ -280,7 +279,7 @@ def _ensure_csv_header() -> None:
     Always ensure the CSV starts with the correct header row.
     If the file does not exist, create it with the header.
     If it exists but the first line is NOT the header (old data files),
-    we do NOT overwrite – data integrity is preserved; the caller is
+    we do NOT overwrite - data integrity is preserved; the caller is
     responsible for backing up before this call.
     """
     if not os.path.exists(CSV_LOG_PATH):
@@ -296,7 +295,7 @@ def _ensure_csv_header() -> None:
     expected_header = ",".join(CSV_FIELDS)
     if first_line != expected_header:
         # Prepend the correct header
-        log.info("CSV missing header – prepending it now.")
+        log.info("CSV missing header - prepending it now.")
         with open(CSV_LOG_PATH, "r", newline="") as f:
             body = f.read()
         with open(CSV_LOG_PATH, "w", newline="") as f:
@@ -316,7 +315,7 @@ def _append_csv(record: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Background sampling thread – MEASURED metrics, no formulas
+# Background sampling thread - MEASURED metrics, no formulas
 # ---------------------------------------------------------------------------
 def sampling_loop(stop_event: threading.Event) -> None:
     """
@@ -509,7 +508,7 @@ def main() -> None:
     _ensure_csv_header()
 
     # Start the process pool
-    log.info("Starting process pool with %d workers…", args.workers)
+    log.info("Starting process pool with %d workers...", args.workers)
     _pool = _PoolManager(args.workers)
     log.info("Process pool ready.")
 
