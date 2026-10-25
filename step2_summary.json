@@ -1,0 +1,139 @@
+{
+  "timestamp": "2026-10-25T13:56:07.491457+00:00",
+  "profiles": [
+    "spike"
+  ],
+  "modes": [
+    "reactive_capacity_aware"
+  ],
+  "repeats": 1,
+  "sensitivity_table": {
+    "98.0%": {
+      "reactive_capacity_aware": {
+        "passes": "0/1",
+        "avg_worker_seconds": 279.0,
+        "avg_success_rate": 96.13
+      }
+    },
+    "99.0%": {
+      "reactive_capacity_aware": {
+        "passes": "0/1",
+        "avg_worker_seconds": 279.0,
+        "avg_success_rate": 96.13
+      }
+    },
+    "99.9%": {
+      "reactive_capacity_aware": {
+        "passes": "0/1",
+        "avg_worker_seconds": 279.0,
+        "avg_success_rate": 96.13
+      }
+    }
+  },
+  "summary_by_profile_and_mode": {
+    "spike": {
+      "reactive_capacity_aware": {
+        "whole_run": {
+          "success_rate": {
+            "mean": 96.13,
+            "min": 96.13,
+            "max": 96.13
+          },
+          "failed_requests": {
+            "mean": 31.0,
+            "min": 31,
+            "max": 31
+          },
+          "worker_seconds": {
+            "mean": 279.0,
+            "min": 279,
+            "max": 279
+          },
+          "cost_per_ok_request": {
+            "mean": 0.36,
+            "min": 0.36,
+            "max": 0.36
+          },
+          "slo_met_seconds_pct": {
+            "mean": 95.77,
+            "min": 95.77,
+            "max": 95.77
+          },
+          "slo_pass_count": 0
+        },
+        "burst_window": {
+          "success_rate": {
+            "mean": 96.13,
+            "min": 96.13,
+            "max": 96.13
+          },
+          "failed_requests": {
+            "mean": 31.0,
+            "min": 31,
+            "max": 31
+          },
+          "worker_seconds": {
+            "mean": 273.0,
+            "min": 273,
+            "max": 273
+          },
+          "cost_per_ok_request": {
+            "mean": 0.35,
+            "min": 0.35,
+            "max": 0.35
+          },
+          "slo_met_seconds_pct": {
+            "mean": 95.77,
+            "min": 95.77,
+            "max": 95.77
+          },
+          "slo_pass_count": 0
+        },
+        "time_to_first_scale_up": {
+          "mean": 1.54,
+          "min": 1.54,
+          "max": 1.54
+        },
+        "time_to_adequate_capacity": {
+          "mean": 3.57,
+          "min": 3.57,
+          "max": 3.57
+        }
+      }
+    }
+  },
+  "individual_runs": [
+    {
+      "run_id": "reactive_capacity_aware_spike_rep1_1792936479",
+      "mode": "reactive_capacity_aware",
+      "repeat": 1,
+      "seed": 42,
+      "profile": "spike",
+      "duration_sec": 77.42,
+      "time_to_first_scale_up": 1.54,
+      "time_to_adequate_capacity": 3.57,
+      "whole_run": {
+        "success_rate": 96.13,
+        "failed_requests": 31,
+        "slo_pass": false,
+        "worker_seconds": 279,
+        "cost_per_ok_request": 0.362,
+        "slo_met_seconds_pct": 95.77,
+        "total_arrivals": 801,
+        "total_ok": 770
+      },
+      "burst_window": {
+        "success_rate": 96.13,
+        "failed_requests": 31,
+        "slo_pass": false,
+        "worker_seconds": 273,
+        "cost_per_ok_request": 0.355,
+        "slo_met_seconds_pct": 95.77,
+        "total_arrivals": 801,
+        "total_ok": 770
+      },
+      "perm_scale_events": []
+    }
+  ],
+  "perm_scale_up_alerts": []
+}

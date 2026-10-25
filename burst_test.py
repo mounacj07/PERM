@@ -76,22 +76,66 @@ def generate_schedule(profile: str, seed: int) -> Tuple[List[float], float, floa
             (45.0, 40.0, 40.0, False),
             (30.0, 4.0, 4.0, False),
         ]
+    elif profile == "spike":
+        # 4 -> 40 req/s for 15 s -> 4
+        stages = [
+            (30.0, 4.0, 4.0, False),
+            (15.0, 40.0, 40.0, True),
+            (30.0, 4.0, 4.0, False),
+        ]
+    elif profile == "double_burst":
+        # Two 30s bursts separated by 30s calm
+        stages = [
+            (20.0, 4.0, 4.0, False),
+            (30.0, 40.0, 40.0, True),
+            (30.0, 4.0, 4.0, False),
+            (30.0, 40.0, 40.0, False),
+            (20.0, 4.0, 4.0, False),
+        ]
+    elif profile == "sawtooth":
+        # Up and down ramps
+        stages = [
+            (20.0, 4.0, 4.0, False),
+            (20.0, 4.0, 40.0, True),
+            (20.0, 40.0, 4.0, False),
+            (20.0, 4.0, 40.0, False),
+            (20.0, 40.0, 4.0, False),
+            (20.0, 4.0, 4.0, False),
+        ]
+    elif profile == "random_walk":
+        # Seeded rate changes every 10-20 s between 3 and 45 req/s
+        stages = [(20.0, 4.0, 4.0, False)]
+        rem_dur = 100.0  # total 120s
+        first_burst_flag = True
+        cur_rate = 4.0
+        while rem_dur > 0:
+            dur = min(rem_dur, round(rng.uniform(10.0, 20.0), 1))
+            next_rate = round(rng.uniform(3.0, 45.0), 1)
+            is_burst = False
+            if first_burst_flag and (next_rate >= 15.0 or rem_dur < 80.0):
+                is_burst = True
+                first_burst_flag = False
+            stages.append((dur, cur_rate, next_rate, is_burst))
+            cur_rate = next_rate
+            rem_dur -= dur
     else:
         raise ValueError(f"Unknown profile: {profile}")
 
     current_t = 0.0
+    stage_start_t = 0.0
     burst_start_offset = 30.0
     total_duration = sum(d for d, _, _, _ in stages)
 
     for dur, r_start, r_end, is_burst in stages:
-        stage_end = current_t + dur
+        stage_end = stage_start_t + dur
         if is_burst:
-            burst_start_offset = current_t
+            burst_start_offset = stage_start_t
 
+        current_t = max(current_t, stage_start_t)
         while current_t < stage_end:
             # Linear interpolation of rate within stage
             if dur > 0:
-                fraction = min(1.0, max(0.0, (current_t - (stage_end - dur)) / dur))
+                fraction = min(1.0, max(0.0, (current_t - stage_start_t) / dur))
             else:
                 fraction = 1.0
             current_rate = r_start + fraction * (r_end - r_start)
@@ -102,6 +146,8 @@ def generate_schedule(profile: str, seed: int) -> Tuple[List[float], float, floa
             current_t += dt
             if current_t < stage_end:
                 offsets.append(current_t)
+
+        stage_start_t = stage_end
 
     offsets.sort()
     return offsets, burst_start_offset, total_duration
@@ -236,7 +282,11 @@ def run_burst(
 
 def main():
     parser = argparse.ArgumentParser(description="PERM open-loop Poisson traffic generator")
-    parser.add_argument("--profile", choices=["step", "ramp"], default="step")
+    parser.add_argument(
+        "--profile",
+        choices=["step", "ramp", "spike", "double_burst", "sawtooth", "random_walk"],
+        default="step",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--target-url", type=str, default=DEFAULT_TARGET_URL)
     parser.add_argument("--load", type=int, default=DEFAULT_LOAD)

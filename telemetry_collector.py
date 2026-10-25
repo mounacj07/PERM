@@ -172,6 +172,12 @@ CSV_FIELDS = [
     "in_flight",
     "worker_cpu_percent",
     "ok_p95_latency_ms",
+    # Step 2 additions
+    "busy_workers",
+    "utilization",
+    "worker_cpu_per_active_pct",
+    "queue_wait_ms_avg",
+    "cpu_freq_mhz",
 ]
 
 
@@ -227,16 +233,22 @@ def _worker_process_main(
                 break
             continue
 
-        req_id, load, deadline_mono = item
+        if len(item) >= 4:
+            req_id, load, deadline_mono, enqueue_mono = item[:4]
+        else:
+            req_id, load, deadline_mono = item[:3]
+            enqueue_mono = time.monotonic()
 
         with queue_depth_val.get_lock():
             queue_depth_val.value = max(0, queue_depth_val.value - 1)
 
-        # Load shedding: skip jobs already past deadline
         now_mono = time.monotonic()
+        q_wait_ms = max(0.0, (now_mono - enqueue_mono) * 1000.0)
+
+        # Load shedding: skip jobs already past deadline
         if now_mono >= deadline_mono:
             try:
-                response_queue.put_nowait((req_id, False, "deadline_exceeded", 0.0))
+                response_queue.put_nowait((req_id, False, "deadline_exceeded", 0.0, q_wait_ms))
             except Exception:
                 pass
             continue
@@ -252,7 +264,7 @@ def _worker_process_main(
             active_workers_busy.value = max(0, active_workers_busy.value - 1)
 
         try:
-            response_queue.put_nowait((req_id, True, None, duration_ms))
+            response_queue.put_nowait((req_id, True, None, duration_ms, q_wait_ms))
         except Exception:
             pass
 
@@ -376,7 +388,12 @@ class _PoolManager:
             if item is None:
                 break
 
-            req_id, success, err_msg, dur_ms = item
+            if len(item) >= 5:
+                req_id, success, err_msg, dur_ms, q_wait_ms = item[:5]
+            else:
+                req_id, success, err_msg, dur_ms = item[:4]
+                q_wait_ms = 0.0
+
             with self._pending_lock:
                 entry = self._pending_requests.get(req_id)
             if entry is not None:
@@ -384,6 +401,7 @@ class _PoolManager:
                 res_box[0] = success
                 res_box[1] = err_msg
                 res_box[2] = dur_ms
+                res_box[3] = q_wait_ms
                 ev.set()
 
     def submit_request(self, load: int, timeout_sec: float) -> Tuple[int, str, float]:
@@ -392,9 +410,10 @@ class _PoolManager:
         Returns (status_code, status_str, duration_ms).
         """
         req_id = next(self._req_counter)
-        deadline = time.monotonic() + timeout_sec
+        t_enq = time.monotonic()
+        deadline = t_enq + timeout_sec
         ev = threading.Event()
-        res_box = [False, "timeout", 0.0]
+        res_box = [False, "timeout", 0.0, 0.0]
 
         with self._pending_lock:
             self._pending_requests[req_id] = (ev, res_box)
@@ -402,7 +421,7 @@ class _PoolManager:
         try:
             with self.queue_depth_val.get_lock():
                 self.queue_depth_val.value += 1
-            self.request_queue.put_nowait((req_id, load, deadline))
+            self.request_queue.put_nowait((req_id, load, deadline, t_enq))
         except queue.Full:
             with self.queue_depth_val.get_lock():
                 self.queue_depth_val.value = max(0, self.queue_depth_val.value - 1)
@@ -419,7 +438,8 @@ class _PoolManager:
         if not completed:
             return 503, "timeout", (time.monotonic() - (deadline - timeout_sec)) * 1000.0
 
-        success, err_msg, dur_ms = res_box
+        success, err_msg, dur_ms, q_wait_ms = res_box
+        _record_queue_wait(q_wait_ms)
         if success:
             return 200, "processed", dur_ms
         else:
@@ -554,10 +574,15 @@ class _PoolManager:
                     pinned.extend(w.core_affinity)
             return sorted(list(set(pinned))) if pinned else (WORKER_CORE_IDS or [])
 
-    def get_worker_cpu_percent(self) -> float:
-        """Measure CPU of worker processes normalized by system core count."""
+    def get_worker_cpu_stats(self) -> Tuple[float, float]:
+        """
+        Returns (worker_cpu_percent, worker_cpu_per_active_pct).
+        worker_cpu_percent is normalized by total system cpu_count (e.g. 16).
+        worker_cpu_per_active_pct is normalized by ACTIVE workers.
+        """
         with self._lock:
             procs = [w.get_psutil() for w in self._workers if w.proc.is_alive()]
+            n_active = len(procs)
         total_pct = 0.0
         for p in procs:
             if p:
@@ -565,7 +590,13 @@ class _PoolManager:
                     total_pct += p.cpu_percent(interval=None)
                 except Exception:
                     pass
-        return round(total_pct / _cpu_count, 2)
+        sys_norm = round(total_pct / _cpu_count, 2)
+        active_norm = round(total_pct / n_active, 2) if n_active > 0 else 0.0
+        return sys_norm, active_norm
+
+    def get_worker_cpu_percent(self) -> float:
+        """Measure CPU of worker processes normalized by system core count."""
+        return self.get_worker_cpu_stats()[0]
 
     def shutdown(self) -> None:
         self._stop_dispatcher.set()
@@ -596,6 +627,7 @@ _window_timeout: int = 0
 _window_rejected: int = 0
 _window_ok_latencies: List[float] = []
 _window_all_latencies: List[float] = []
+_window_queue_waits: List[float] = []
 
 _pool: Optional[_PoolManager] = None
 
@@ -627,8 +659,14 @@ def _record_rejected() -> None:
         _window_rejected += 1
 
 
-def _drain_telemetry_window() -> Tuple[int, int, int, int, List[float], List[float]]:
-    global _window_arrivals, _window_ok, _window_timeout, _window_rejected
+def _record_queue_wait(wait_ms: float) -> None:
+    global _window_queue_waits
+    with _state_lock:
+        _window_queue_waits.append(wait_ms)
+
+
+def _drain_telemetry_window() -> Tuple[int, int, int, int, List[float], List[float], List[float]]:
+    global _window_arrivals, _window_ok, _window_timeout, _window_rejected, _window_queue_waits
     with _state_lock:
         arr = _window_arrivals
         ok = _window_ok
@@ -636,6 +674,7 @@ def _drain_telemetry_window() -> Tuple[int, int, int, int, List[float], List[flo
         rej = _window_rejected
         ok_lats = _window_ok_latencies[:]
         all_lats = _window_all_latencies[:]
+        q_waits = _window_queue_waits[:]
 
         _window_arrivals = 0
         _window_ok = 0
@@ -643,8 +682,9 @@ def _drain_telemetry_window() -> Tuple[int, int, int, int, List[float], List[flo
         _window_rejected = 0
         _window_ok_latencies.clear()
         _window_all_latencies.clear()
+        _window_queue_waits.clear()
 
-    return arr, ok, to, rej, ok_lats, all_lats
+    return arr, ok, to, rej, ok_lats, all_lats, q_waits
 
 
 def _percentile(data: List[float], p: float) -> float:
@@ -707,25 +747,36 @@ def sampling_loop(stop_event: threading.Event) -> None:
         sys_cpu = psutil.cpu_percent(interval=None)
         mem_pct = psutil.virtual_memory().percent
 
-        arr, ok, to, rej, ok_lats, all_lats = _drain_telemetry_window()
+        arr, ok, to, rej, ok_lats, all_lats, q_waits = _drain_telemetry_window()
         errors = to + rej
         req_count = ok + to  # completed requests in window
 
         avg_lat = statistics.mean(all_lats) if all_lats else 0.0
         p95_lat = _percentile(all_lats, 95)
         ok_p95_lat = _percentile(ok_lats, 95)
+        queue_wait_ms_avg = round(statistics.mean(q_waits), 2) if q_waits else 0.0
 
         if _pool:
             depth = max(0, _pool.queue_depth_val.value)
-            busy = max(0, _pool.active_workers_busy.value)
+            busy = min(max(0, _pool.active_workers_busy.value), _pool.n_workers)
             in_flight = depth + busy
             workers = _pool.n_workers
-            worker_cpu_pct = _pool.get_worker_cpu_percent()
+            worker_cpu_pct, worker_cpu_per_active = _pool.get_worker_cpu_stats()
         else:
             depth = 0
+            busy = 0
             in_flight = 0
             workers = 2
             worker_cpu_pct = 0.0
+            worker_cpu_per_active = 0.0
+
+        utilization = round(busy / workers, 4) if workers > 0 else 0.0
+
+        try:
+            freq_info = psutil.cpu_freq()
+            cpu_freq_mhz = round(freq_info.current, 1) if freq_info else 0.0
+        except Exception:
+            cpu_freq_mhz = 0.0
 
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -745,6 +796,12 @@ def sampling_loop(stop_event: threading.Event) -> None:
             "in_flight": in_flight,
             "worker_cpu_percent": worker_cpu_pct,
             "ok_p95_latency_ms": round(ok_p95_lat, 2),
+            # Step 2 additions
+            "busy_workers": busy,
+            "utilization": utilization,
+            "worker_cpu_per_active_pct": worker_cpu_per_active,
+            "queue_wait_ms_avg": queue_wait_ms_avg,
+            "cpu_freq_mhz": cpu_freq_mhz,
         }
 
         with _state_lock:

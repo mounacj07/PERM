@@ -1,0 +1,297 @@
+{
+  "generated_at": "2026-10-25T14:12:03.993388+00:00",
+  "target_capacity_workers": 8,
+  "profiles": [
+    "step",
+    "ramp",
+    "spike",
+    "double_burst",
+    "sawtooth",
+    "random_walk"
+  ],
+  "seeds": [
+    42,
+    43,
+    44,
+    45,
+    46
+  ],
+  "total_runs": 30,
+  "completed_runs": 2,
+  "runs": [
+    {
+      "run_id": "step_seed42",
+      "profile": "step",
+      "seed": 42,
+      "duration_sec": 120.0,
+      "csv_file": "step_seed42.csv",
+      "rows_logged": 122,
+      "total_arrivals": 2589,
+      "total_ok": 2589,
+      "completed": true
+    },
+    {
+      "run_id": "step_seed43",
+      "profile": "step",
+      "seed": 43,
+      "duration_sec": 120.0,
+      "csv_file": "step_seed43.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "step_seed44",
+      "profile": "step",
+      "seed": 44,
+      "duration_sec": 120.0,
+      "csv_file": "step_seed44.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "step_seed45",
+      "profile": "step",
+      "seed": 45,
+      "duration_sec": 120.0,
+      "csv_file": "step_seed45.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "step_seed46",
+      "profile": "step",
+      "seed": 46,
+      "duration_sec": 120.0,
+      "csv_file": "step_seed46.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "ramp_seed42",
+      "profile": "ramp",
+      "seed": 42,
+      "duration_sec": 135.0,
+      "csv_file": "ramp_seed42.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "ramp_seed43",
+      "profile": "ramp",
+      "seed": 43,
+      "duration_sec": 135.0,
+      "csv_file": "ramp_seed43.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "ramp_seed44",
+      "profile": "ramp",
+      "seed": 44,
+      "duration_sec": 135.0,
+      "csv_file": "ramp_seed44.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "ramp_seed45",
+      "profile": "ramp",
+      "seed": 45,
+      "duration_sec": 135.0,
+      "csv_file": "ramp_seed45.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "ramp_seed46",
+      "profile": "ramp",
+      "seed": 46,
+      "duration_sec": 135.0,
+      "csv_file": "ramp_seed46.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "spike_seed42",
+      "profile": "spike",
+      "seed": 42,
+      "duration_sec": 75.0,
+      "csv_file": "spike_seed42.csv",
+      "rows_logged": 77,
+      "total_arrivals": 801,
+      "total_ok": 801,
+      "completed": true
+    },
+    {
+      "run_id": "spike_seed43",
+      "profile": "spike",
+      "seed": 43,
+      "duration_sec": 75.0,
+      "csv_file": "spike_seed43.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "spike_seed44",
+      "profile": "spike",
+      "seed": 44,
+      "duration_sec": 75.0,
+      "csv_file": "spike_seed44.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "spike_seed45",
+      "profile": "spike",
+      "seed": 45,
+      "duration_sec": 75.0,
+      "csv_file": "spike_seed45.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "spike_seed46",
+      "profile": "spike",
+      "seed": 46,
+      "duration_sec": 75.0,
+      "csv_file": "spike_seed46.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "double_burst_seed42",
+      "profile": "double_burst",
+      "seed": 42,
+      "duration_sec": 130.0,
+      "csv_file": "double_burst_seed42.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "double_burst_seed43",
+      "profile": "double_burst",
+      "seed": 43,
+      "duration_sec": 130.0,
+      "csv_file": "double_burst_seed43.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "double_burst_seed44",
+      "profile": "double_burst",
+      "seed": 44,
+      "duration_sec": 130.0,
+      "csv_file": "double_burst_seed44.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "double_burst_seed45",
+      "profile": "double_burst",
+      "seed": 45,
+      "duration_sec": 130.0,
+      "csv_file": "double_burst_seed45.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "double_burst_seed46",
+      "profile": "double_burst",
+      "seed": 46,
+      "duration_sec": 130.0,
+      "csv_file": "double_burst_seed46.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "sawtooth_seed42",
+      "profile": "sawtooth",
+      "seed": 42,
+      "duration_sec": 120.0,
+      "csv_file": "sawtooth_seed42.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "sawtooth_seed43",
+      "profile": "sawtooth",
+      "seed": 43,
+      "duration_sec": 120.0,
+      "csv_file": "sawtooth_seed43.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "sawtooth_seed44",
+      "profile": "sawtooth",
+      "seed": 44,
+      "duration_sec": 120.0,
+      "csv_file": "sawtooth_seed44.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "sawtooth_seed45",
+      "profile": "sawtooth",
+      "seed": 45,
+      "duration_sec": 120.0,
+      "csv_file": "sawtooth_seed45.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "sawtooth_seed46",
+      "profile": "sawtooth",
+      "seed": 46,
+      "duration_sec": 120.0,
+      "csv_file": "sawtooth_seed46.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "random_walk_seed42",
+      "profile": "random_walk",
+      "seed": 42,
+      "duration_sec": 120.0,
+      "csv_file": "random_walk_seed42.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "random_walk_seed43",
+      "profile": "random_walk",
+      "seed": 43,
+      "duration_sec": 120.0,
+      "csv_file": "random_walk_seed43.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "random_walk_seed44",
+      "profile": "random_walk",
+      "seed": 44,
+      "duration_sec": 120.0,
+      "csv_file": "random_walk_seed44.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "random_walk_seed45",
+      "profile": "random_walk",
+      "seed": 45,
+      "duration_sec": 120.0,
+      "csv_file": "random_walk_seed45.csv",
+      "rows_logged": 0,
+      "completed": false
+    },
+    {
+      "run_id": "random_walk_seed46",
+      "profile": "random_walk",
+      "seed": 46,
+      "duration_sec": 120.0,
+      "csv_file": "random_walk_seed46.csv",
+      "rows_logged": 0,
+      "completed": false
+    }
+  ]
+}

@@ -19,7 +19,12 @@
 
 4. **Claim: "Current metric was healthy (126 ms, 49% CPU) when alert fired"**
    - **Status**: **SUPERSEDED**
-   - **Measured Fact**: 126 ms is simply the raw CPU service time ($7 \times 18\text{ ms}$) for a single request with zero queue wait. Furthermore, the 49.3% CPU measurement is system-wide across all 16 cores. With only 2-4 active workers, 49.3% system CPU represents near-total saturation of the allotted worker cores. The system was already experiencing congestion, not in a calm "healthy" state.
+   - **Measured Fact**: 126 ms is simply the raw CPU service time ($7 \times 18\text{ ms}$) for an unqueued request. The claim that 49.3% system CPU represents "near-total saturation of 4 worker cores" was mathematically false: 4 pinned busy workers on a 16-logical-core machine can consume at most $4 / 16 = 25.0\%$ of total machine CPU. In reality, analysis of `step1b_comparison.csv` across all PERM runs (363 seconds) shows:
+     - Mean system `cpu_percent`: **37.17%** (min 2.5%, max 90.0%)
+     - Mean `worker_cpu_percent`: **14.53%** (min 0.0%, max 40.16%)
+     - Mean non-worker CPU (`cpu_percent - worker_cpu_percent`): **22.64%** (min 2.5%, max 59.03%)
+     - In **80.17% of seconds** (291 of 363), non-worker CPU exceeded 10% of total machine capacity.
+     This CPU was consumed by the Flask master process, client load generator threads (`burst_test.py`), and background microservice pollers/inference engines. Because non-worker CPU substantially exceeds 10% of the machine, system-wide `cpu_percent` is contaminated by test harness overhead and is documented as a **CPU Contamination Limitation**. Only `worker_cpu_percent` reflects true worker demand.
 
 5. **Claim: "All tests pass / Timeout 3.0 s"**
    - **Status**: **SUPERSEDED**
@@ -139,10 +144,28 @@ Values reported as **Mean [Min – Max]**:
 | **Time to p95 Recovery (s)** | 0.0s (shedding skips backlog) | 0.0s (capacity handles burst) | 6.88s [0.0s to 20.63s] | **0.0s** [0.0s to 0.0s] |
 | **Resource Cost (Worker-Seconds)** | **242.67** [242–244] | 970.67 [968–976] | 726.67 [724–732] | **533.33** [374–690] |
 
-### Key Trade-Off Insights:
-1. **Cost vs Provisioning**: Fixed 8 workers achieves 100% OK throughput but incurs maximum cost (**970.7 worker-seconds**), running 8 cores even during the 60 seconds of calm traffic.
-2. **Reactive Overhead**: The reactive autoscaler scales up only after detecting elevated queue depth/p95 latency (+0.82s), achieving 98.4% OK at a cost of **726.7 worker-seconds**.
-3. **Predictive Efficiency**: PERM operates at **533.3 worker-seconds**—a **26.6% reduction in compute cost** compared to reactive scaling and **45.1% cheaper** than fixed 8 workers, while keeping peak p95 latency lower (**140.1 ms**) by utilizing predictive alerts and shedding expired requests.
+### Key Trade-Off Insights & SLO Sensitivity:
+
+> [!WARNING]
+> Cost (worker-seconds) can only be compared fairly when systems deliver equivalent SLO outcomes. Under the formal SLO definition (**success rate $\ge 99.0\%$**):
+> - **Fixed 8** passed 3 of 3 runs.
+> - **Reactive** passed 1 of 3 runs (averaging 98.41% success).
+> - **PERM** and **Fixed 2** passed 0 of 3 runs (45.54% and 85.69% success).
+> 
+> Comparing PERM's 533.3 worker-seconds to Reactive (726.7) or Fixed 8 (970.7) without accounting for PERM's 14.3% dropped request rate is invalid.
+
+#### Sensitivity Table: SLO Pass Rate and Resource Cost
+
+| Mode | Success Rate (Mean) | 98.0% SLO Pass | 99.0% SLO Pass | 99.9% SLO Pass | Worker-Seconds (Mean) | Cost / OK Req (w-s) |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| **Fixed 2** | 45.54% | 0 / 3 (0%) | 0 / 3 (0%) | 0 / 3 (0%) | 242.7 w-s | 0.20 |
+| **Fixed 8** | 100.00% | **3 / 3 (100%)** | **3 / 3 (100%)** | **3 / 3 (100%)** | 970.7 w-s | 0.37 |
+| **Reactive** | 98.41% | **2 / 3 (67%)** | 1 / 3 (33%) | 0 / 3 (0%) | 726.7 w-s | 0.28 |
+| **PERM** | 85.69% | 0 / 3 (0%) | 0 / 3 (0%) | 0 / 3 (0%) | 533.3 w-s | 0.23 (failed SLO) |
+
+1. **Fixed 8 workers**: Delivers 100% OK throughput but incurs maximum cost (**970.7 worker-seconds**), running 8 cores continuously throughout the run.
+2. **Reactive Autoscaler**: Scales up upon detecting elevated backlog (+0.82s), delivering 98.4% OK at **726.7 worker-seconds** (a 25.1% compute savings over Fixed 8).
+3. **PERM (Predictive)**: Consumed **533.3 worker-seconds** but failed the SLO due to delayed scale-up (+9.79s after burst start), dropping 376 requests per run.
 
 ---
 
@@ -190,14 +213,21 @@ test_testbed.py::TestFlaskClient::test_process_returns_processed PASSED         
 ## 7. System Environment & Limitations
 
 1. **OS Environment**: Tested on Windows 11 with Python 3.13. Multiprocessing uses the `spawn` start method. Worker initialization is coordinated via explicit `ready_event` synchronization.
-2. **CPU Affinity & Core Allocation**: 
-   - Host has 16 logical cores (`cpu_count = 16`).
-   - Cores 0 and 1 are explicitly reserved unpinned for the Flask web server, background poller, and open-loop load generation threads.
-   - Worker processes are pinned to cores `[2, 3, 4, 5, 6, 7, 8, 9]`.
-3. **Queue Sizing & Shedding**:
+2. **Hardware Constraints (Laptop-Class CPU)**:
+   - Host CPU is an **AMD Ryzen 7 7730U** (8 physical cores, 16 logical threads, 15W TDP ceiling).
+   - Under sustained multi-core load, thermal throttling can reduce core clocks. Telemetry records `cpu_freq_mhz` (`psutil.cpu_freq().current`) to monitor frequency scaling.
+3. **Physical Core Allocation & SMT Siblings**:
+   - Physical cores 0 and 1 (logical cores `[0, 1, 2, 3]`) are explicitly reserved unpinned for the Flask master process, background poller, and client load-generator threads.
+   - Exactly **6 physical cores** are available for dedicated worker binding (`[4, 6, 8, 10, 12, 14]`).
+   - When scaled to 7 or 8 workers, workers 7 and 8 must share SMT sibling threads (`[5, 7]`). As measured in calibration, 8 workers achieve 61.7 req/s (97.2% efficiency) rather than 63.5 req/s due to SMT hardware thread contention.
+4. **CPU Contamination Limitation**:
+   - Running Flask, the load-generator, and 4 background microservices on the same host consumes substantial non-worker CPU.
+   - In `step1b_comparison.csv` across PERM runs, non-worker CPU averaged **22.64%** of total machine capacity, exceeding 10% in **80.17% of seconds**.
+   - System-wide `cpu_percent` is therefore contaminated by test harness overhead. `worker_cpu_percent` and per-worker metrics must be used to assess actual worker load.
+5. **Queue Sizing & Shedding**:
    - `QUEUE_CAPACITY` default is 20.
-   - Under saturation, queue wait is bounded ($20 / 15.87 \approx 1.26\text{ s}$ at 2 workers), strictly below the `REQUEST_TIMEOUT_SEC` (default 2.0s in code, overridable to 3.0s), allowing load shedding to reject surplus traffic immediately via HTTP 503 rather than holding connections until client timeout.
-4. **No Docker Requirement**: All microservices run natively via standard Python and communicate over HTTP loopback (`127.0.0.1:5000` through `5003`).
+   - Under saturation, queue wait is bounded ($20 / 15.87 \approx 1.26\text{ s}$ at 2 workers), strictly below `REQUEST_TIMEOUT_SEC` (default 2.0s), allowing load shedding to reject surplus traffic immediately via HTTP 503 rather than holding connections until client timeout.
+6. **No Docker Requirement**: All microservices run natively via standard Python and communicate over HTTP loopback (`127.0.0.1:5000` through `5003`).
 
 ---
 

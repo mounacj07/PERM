@@ -11,15 +11,17 @@
 
 2. **Claim: "-89% errors, -72% latency, +74% throughput"**
    - **Status**: **SUPERSEDED**
-   - **Measured Fact**: In Pass 1 (fixed 2 workers), 857 of 885 requests timed out (96.8% failure rate)—a catastrophic congestion-collapse baseline. The "-89% errors" and "-72% latency" figures were relative to a completely broken baseline. Furthermore, the claimed "+74% throughput" was actually measured system CPU percentage rise (25.1% to 43.6%), **not** application throughput (requests/second).
+   - **Measured Fact**: In Pass 1 (fixed 2 workers), 857 of 885 requests timed out (96.8% failure rate)—a catastrophic congestion-collapse baseline. The "-89% errors" and "-72% latency" figures were relative to a completely broken baseline. Furthermore, the claimed "+74% throughput" was actually comparing mean system CPU percentage from `step1_scaling_proof.csv` (field `cpu_percent`: 37.29% for fixed_2 vs 65.05% for auto_scaling, a +74.4% relative rise in CPU), **not** application throughput (requests/second).
 
 3. **Claim: "Bounded queueing with HTTP 503 timeouts"**
    - **Status**: **SUPERSEDED**
    - **Measured Fact**: The bounded queue (`QUEUE_CAPACITY`) did **not** exist in the Step 1 code; requests accumulated in an unbounded queue inside Python's `ProcessPoolExecutor`, causing head-of-line blocking and cascading timeouts instead of immediate 503 rejections.
 
-4. **Claim: "SLO met under PERM"**
+4. **Claim: "SLO met under PERM (Pass 2)"**
    - **Status**: **SUPERSEDED**
-   - **Measured Fact**: Neither Pass 1 (fixed 2 workers) nor Pass 2 (PERM) met the target SLO threshold of $\text{p95} \le 300\text{ ms}$ in **any single second** of the run (Pass 2 p95 remained $> 1,000\text{ ms}$ throughout the overload).
+   - **Measured Fact**: Neither Pass 1 nor Pass 2 met the target SLO threshold of $\text{p95} \le 300\text{ ms}$ in **any single second** of the run. In `step1_scaling_proof.csv` (field `p95_latency_ms`):
+     - **Pass 2 (auto_scaling)**: Minimum p95 was 559.15 ms, 20 of 61 active seconds had p95 > 1,000 ms, mean p95 of the last 40 s was 744.32 ms, and **no second reached p95 <= 300 ms**.
+     - **Pass 1 (fixed_2workers)**: Minimum p95 was 542.99 ms, 59 of 60 active seconds had p95 > 1,000 ms, mean p95 of the last 40 s was 2,013.86 ms, and **no second reached p95 <= 300 ms**.
 
 ---
 

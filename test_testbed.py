@@ -421,6 +421,9 @@ class TestTestbed(unittest.TestCase):
             "arrivals_count", "ok_count", "timeout_count",
             "rejected_count", "in_flight", "worker_cpu_percent",
             "ok_p95_latency_ms",
+            # Step 2 fields:
+            "busy_workers", "utilization", "worker_cpu_per_active_pct",
+            "queue_wait_ms_avg", "cpu_freq_mhz",
         ]:
             self.assertIn(field, data, f"Missing field: {field}")
 
@@ -600,23 +603,19 @@ class TestTestbed(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Test 7 - run_all.py integration (optional, only if not in CI)
+# Test 7 - run_all.py integration
 # ---------------------------------------------------------------------------
 class TestRunAll(unittest.TestCase):
 
-    @unittest.skipIf(
-        os.environ.get("SKIP_RUN_ALL_TEST"),
-        "Skipped: SKIP_RUN_ALL_TEST is set",
-    )
     def test_07_run_all_starts_services(self):
         """
         python run_all.py starts every service and the dashboard loads.
         NOTE: This test starts all services on their real ports (5000-5003, 8000).
-        Run with SKIP_RUN_ALL_TEST=1 if those ports are in use.
         """
         import requests as _req
 
         print("\n[TEST 7] run_all.py integration...")
+        time.sleep(2.0)
         env = os.environ.copy()
         env["PYTHONWARNINGS"] = "ignore"
         env["PYTHONIOENCODING"] = "utf-8"
@@ -649,11 +648,19 @@ class TestRunAll(unittest.TestCase):
                 self.assertTrue(success, f"{name} did not become reachable at {url}")
                 print(f"  -> {name} OK")
         finally:
-            proc.terminate()
             try:
-                proc.wait(timeout=5.0)
-            except subprocess.TimeoutExpired:
+                import psutil
+                parent = psutil.Process(proc.pid)
+                children = parent.children(recursive=True)
+                for child in children:
+                    try:
+                        child.kill()
+                    except Exception:
+                        pass
+                parent.kill()
+            except Exception:
                 proc.kill()
+            time.sleep(1.0)
 
 
 # ---------------------------------------------------------------------------
