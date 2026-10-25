@@ -38,11 +38,12 @@ services:
   remediation-service:
     build: .
     container_name: perm-remediation-service
-    command: python remediation_service.py --port 5003 --alert-url http://alert-engine:5002
+    command: python remediation_service.py --port 5003 --alert-url http://alert-engine:5002 --collector-url http://telemetry-collector:5000
     ports:
       - "5003:5003"
     depends_on:
       - alert-engine
+      - telemetry-collector
     restart: unless-stopped
     volumes:
       - .:/app
@@ -50,11 +51,14 @@ services:
   web-dashboard:
     build: .
     container_name: perm-web-dashboard
-    command: python web_dashboard/app.py --port 8000
+    command: python web_dashboard/app.py --port 8000 --collector-url http://telemetry-collector:5000 --inference-url http://inference-service:5001 --alert-url http://alert-engine:5002 --remediation-url http://remediation-service:5003
     ports:
       - "8000:8000"
     depends_on:
       - remediation-service
+      - telemetry-collector
+      - inference-service
+      - alert-engine
     restart: unless-stopped
     volumes:
       - .:/app
