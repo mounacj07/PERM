@@ -38,6 +38,7 @@ log = logging.getLogger("web_dashboard")
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CSV_EVENTS_PATH = os.path.join(PROJECT_ROOT, "controller_events.csv")
 STATE_JSON_PATH = os.path.join(PROJECT_ROOT, "controller_state.json")
+STATUS_JSON_PATH = os.path.join(PROJECT_ROOT, "controller_status.json")
 
 def _read_controller_events():
     events = []
@@ -55,6 +56,15 @@ def _read_controller_state():
     if os.path.exists(STATE_JSON_PATH):
         try:
             with open(STATE_JSON_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _read_controller_status():
+    if os.path.exists(STATUS_JSON_PATH):
+        try:
+            with open(STATUS_JSON_PATH, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
             pass
@@ -217,8 +227,10 @@ def create_app(service_urls: dict = None):
 
         ctrl_events = _read_controller_events()
         ctrl_state = _read_controller_state()
+        ctrl_status = _read_controller_status()
         snapshot["controller_events"] = ctrl_events
         snapshot["controller_state"] = ctrl_state
+        snapshot["controller_status"] = ctrl_status
         snapshot["capacity"] = _cached_state.get("capacity", {})
 
         # Mode label: 'PERM v0 (old model)' unless the final model is wired in live

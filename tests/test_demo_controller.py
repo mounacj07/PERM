@@ -10,6 +10,7 @@ Tests:
 5. An alert is written when pool utilization crosses 70%
 """
 
+import json
 import logging
 import os
 import tempfile
@@ -29,11 +30,21 @@ def temp_csv():
 
 
 @pytest.fixture
-def controller(temp_csv):
+def temp_status():
+    fd, path = tempfile.mkstemp(suffix=".json")
+    os.close(fd)
+    yield path
+    if os.path.exists(path):
+        os.remove(path)
+
+
+@pytest.fixture
+def controller(temp_csv, temp_status):
     return DemoController(
         mode="predictive",
         initial_workers=2,
         csv_path=temp_csv,
+        status_path=temp_status,
     )
 
 
@@ -354,4 +365,75 @@ def test_capacity_aware_mode(temp_csv):
         assert r15["scale_event"]["action"] == "scale_down"
         assert r15["scale_event"]["to_workers"] == 2
         mock_apply.assert_called_once_with(2)
+
+
+def test_controller_status_json_written_every_step(controller, temp_status):
+    """
+    Verify controller_status.json is written every step and contains:
+    mode, forecast_online, last_decision, time.
+    """
+    record = {
+        "active_workers": 2,
+        "worker_cpu_percent": 5.0,
+        "queue_depth": 1,
+        "arrivals_count": 10.0,
+        "error_count": 0,
+        "timestamp": "2026-10-27T12:00:00Z",
+    }
+    with patch.object(controller, "query_forecast", return_value=None):
+        controller.evaluate_step(record, now_monotonic=100.0)
+
+    assert os.path.exists(temp_status)
+    with open(temp_status, "r", encoding="utf-8") as f:
+        status = json.load(f)
+
+    # 4 required top-level keys
+    assert set(status.keys()) == {"mode", "forecast_online", "last_decision", "time"}
+    assert status["mode"] == "predictive"
+    assert status["time"] == "2026-10-27T12:00:00Z"
+    assert isinstance(status["forecast_online"], bool)
+    assert isinstance(status["last_decision"], dict)
+    assert "action" in status["last_decision"]
+    assert "target" in status["last_decision"]
+    assert "rule" in status["last_decision"]
+    assert "current_workers" in status["last_decision"]
+
+
+def test_controller_status_forecast_online_flag(temp_csv, temp_status):
+    """
+    Verify forecast_online is True when forecaster is reachable and False when offline.
+    """
+    ctrl = DemoController(
+        mode="predictive",
+        initial_workers=2,
+        csv_path=temp_csv,
+        status_path=temp_status,
+    )
+    # Complete 10s warmup so forecaster is actively queried
+    ctrl.arrivals_history.extend([20.0] * 10)
+
+    record = {
+        "active_workers": 2,
+        "worker_cpu_percent": 5.0,
+        "queue_depth": 0,
+        "arrivals_count": 20.0,
+        "error_count": 0,
+        "timestamp": "2026-10-27T12:00:05Z",
+    }
+
+    # Case A: Forecaster returns valid payload -> forecast_online is True
+    with patch.object(ctrl, "query_forecast", return_value={"upper_bound": 25.0}):
+        ctrl.evaluate_step(record, now_monotonic=105.0)
+
+    with open(temp_status, "r", encoding="utf-8") as f:
+        status_online = json.load(f)
+    assert status_online["forecast_online"] is True
+
+    # Case B: Forecaster returns None -> forecast_online is False
+    with patch.object(ctrl, "query_forecast", return_value=None):
+        ctrl.evaluate_step(record, now_monotonic=106.0)
+
+    with open(temp_status, "r", encoding="utf-8") as f:
+        status_offline = json.load(f)
+    assert status_offline["forecast_online"] is False
 

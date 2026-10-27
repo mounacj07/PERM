@@ -58,6 +58,7 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CALIBRATION_PATH = os.path.join(PROJECT_ROOT, "testbed_calibration.json")
 DEFAULT_CSV_PATH = os.path.join(PROJECT_ROOT, "controller_events.csv")
 DEFAULT_STATE_PATH = os.path.join(PROJECT_ROOT, "controller_state.json")
+DEFAULT_STATUS_PATH = os.path.join(PROJECT_ROOT, "controller_status.json")
 CSV_HEADER = ["time", "type", "signal", "value", "reason"]
 
 
@@ -73,6 +74,7 @@ class DemoController:
         calibration_path: str = DEFAULT_CALIBRATION_PATH,
         csv_path: str = DEFAULT_CSV_PATH,
         state_path: str = DEFAULT_STATE_PATH,
+        status_path: str = DEFAULT_STATUS_PATH,
     ):
         self.mode = mode.lower()
         if self.mode not in ("predictive", "reactive", "capacity_aware"):
@@ -82,6 +84,8 @@ class DemoController:
         self.inference_url = inference_url.rstrip("/")
         self.csv_path = csv_path
         self.state_path = state_path
+        self.status_path = status_path
+        self.forecast_online: bool = False
         self.min_workers = 2
         self.max_workers = 8
 
@@ -258,6 +262,14 @@ class DemoController:
             target = min(current_workers, base_target)
             return target, "reactive"
 
+    def check_forecast_online(self) -> bool:
+        """Check if inference service is online and healthy."""
+        try:
+            resp = requests.get(f"{self.inference_url}/health", timeout=0.5)
+            return resp.status_code == 200
+        except Exception:
+            return False
+
     def query_forecast(self, arrivals_list: List[float]) -> Optional[Dict[str, Any]]:
         """Query /forecast/demand endpoint from inference service."""
         if not arrivals_list:
@@ -270,11 +282,14 @@ class DemoController:
                 timeout=1.5,
             )
             if resp.status_code == 200:
+                self.forecast_online = True
                 return resp.json()
             else:
                 log.warning("Forecast endpoint returned HTTP %d", resp.status_code)
+                self.forecast_online = False
                 return None
         except Exception:
+            self.forecast_online = False
             return None
 
     def compute_predictive_target(
@@ -289,13 +304,16 @@ class DemoController:
 
         if len(arrivals_list) < 10:
             log.info("predictive warming up")
+            self.forecast_online = self.check_forecast_online()
             return 0, None
 
         forecast_data = self.query_forecast(arrivals_list)
         if forecast_data is None:
+            self.forecast_online = False
             log.warning("forecast offline")
             return 0, None
 
+        self.forecast_online = True
         upper_bound = float(forecast_data.get("upper_bound", 0.0))
         eff_capacity = self.capacity_per_worker * 0.7
         target = int(math.ceil(upper_bound / eff_capacity))
@@ -352,6 +370,9 @@ class DemoController:
             self.consecutive_above_85 = 0
 
         # 5. Compute scaling targets
+        if self.mode != "predictive":
+            self.forecast_online = self.check_forecast_online()
+
         if self.mode == "capacity_aware":
             cap_target = self.compute_capacity_aware_target(smoothed_arrivals)
             reactive_target = cap_target
@@ -474,6 +495,26 @@ class DemoController:
                 json.dump(res, f)
         except Exception:
             pass
+
+        # Write controller_status.json (mode, forecast_online, last_decision, time)
+        last_decision = {
+            "action": scale_action or "hold",
+            "target": int(scaling_target),
+            "rule": str(trigger_rule),
+            "current_workers": int(self.current_workers),
+        }
+        status_payload = {
+            "mode": self.mode,
+            "forecast_online": bool(self.forecast_online),
+            "last_decision": last_decision,
+            "time": ts_iso,
+        }
+        try:
+            with open(self.status_path, "w", encoding="utf-8") as f:
+                json.dump(status_payload, f, indent=2)
+        except Exception as exc:
+            log.debug("Failed writing %s: %s", self.status_path, exc)
+
         return res
 
     def apply_capacity(self, target_workers: int) -> int:
@@ -541,6 +582,23 @@ class DemoController:
                     )
                 else:
                     log.debug("No telemetry record available from %s", self.collector_url)
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    status_payload = {
+                        "mode": self.mode,
+                        "forecast_online": bool(self.forecast_online),
+                        "last_decision": {
+                            "action": "hold",
+                            "target": int(self.current_workers),
+                            "rule": "no_telemetry",
+                            "current_workers": int(self.current_workers),
+                        },
+                        "time": now_iso,
+                    }
+                    try:
+                        with open(self.status_path, "w", encoding="utf-8") as f:
+                            json.dump(status_payload, f, indent=2)
+                    except Exception:
+                        pass
 
                 sleep_time = next_tick - time.monotonic()
                 if sleep_time > 0:
@@ -590,6 +648,12 @@ def main():
         help="Path to controller_events.csv",
     )
     parser.add_argument(
+        "--status",
+        type=str,
+        default=DEFAULT_STATUS_PATH,
+        help="Path to controller_status.json",
+    )
+    parser.add_argument(
         "--duration",
         type=float,
         default=0.0,
@@ -604,6 +668,7 @@ def main():
         inference_url=args.inference_url,
         calibration_path=args.calibration,
         csv_path=args.csv,
+        status_path=args.status,
     )
     controller.run_loop(duration_sec=args.duration)
 
