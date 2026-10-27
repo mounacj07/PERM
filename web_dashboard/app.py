@@ -2,20 +2,16 @@
 PERM - Predictive Edge Resource Management
 Web Dashboard Application
 
-Serves an interactive dark-glassmorphism Web UI for demonstrating edge monitoring,
-proactive SLO alerts with ~25-30s lead time, and edge resource scaling (AUTO allocation vs MANUAL approval).
+Serves an interactive ops-console Web UI for edge monitoring,
+SLO alert management, live forecasting, and scenario testing.
 
 Run:
     python web_dashboard/app.py --port 8000
-    python web_dashboard/app.py --port 8000 \
-        --collector-url http://telemetry-collector:5000 \
-        --inference-url http://inference-service:5001 \
-        --alert-url http://alert-engine:5002 \
-        --remediation-url http://remediation-service:5003
 """
 
 import argparse
 import csv
+import importlib.util
 import json
 import logging
 import os
@@ -38,21 +34,32 @@ logging.basicConfig(
 log = logging.getLogger("web_dashboard")
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 CSV_EVENTS_PATH = os.path.join(PROJECT_ROOT, "controller_events.csv")
 STATE_JSON_PATH = os.path.join(PROJECT_ROOT, "controller_state.json")
 STATUS_JSON_PATH = os.path.join(PROJECT_ROOT, "controller_status.json")
+LAUNCHER_LOG_PATH = os.path.join(PROJECT_ROOT, "results", "launcher_last.log")
+CONTROLLER_LOG_PATH = os.path.join(PROJECT_ROOT, "results", "controller_last.log")
 
-def _read_controller_events():
+
+def _read_controller_events(since_iso: Optional[str] = None):
     events = []
     if os.path.exists(CSV_EVENTS_PATH):
         try:
             with open(CSV_EVENTS_PATH, "r", encoding="utf-8") as f:
                 reader = csv.DictReader(f)
                 for r in reader:
+                    if since_iso:
+                        t = r.get("time") or r.get("timestamp")
+                        if t and t < since_iso:
+                            continue
                     events.append(r)
         except Exception:
             pass
     return events
+
 
 def _read_controller_state():
     if os.path.exists(STATE_JSON_PATH):
@@ -63,6 +70,7 @@ def _read_controller_state():
             pass
     return {}
 
+
 def _read_controller_status():
     if os.path.exists(STATUS_JSON_PATH):
         try:
@@ -71,6 +79,18 @@ def _read_controller_status():
         except Exception:
             pass
     return {}
+
+
+def _read_launcher_log_tail(n: int = 15) -> List[str]:
+    if not os.path.exists(LAUNCHER_LOG_PATH):
+        return []
+    try:
+        with open(LAUNCHER_LOG_PATH, "r", encoding="utf-8", errors="replace") as f:
+            lines = [line.rstrip() for line in f.readlines()]
+            return lines[-n:]
+    except Exception:
+        return []
+
 
 def get_system_logical_cpus() -> int:
     """Read logical CPUs from the system (defaulting to 16 if undetermined)."""
@@ -81,6 +101,7 @@ def get_system_logical_cpus() -> int:
     except Exception:
         pass
     return 16
+
 
 def compute_worker_cpu_active(worker_cpu_percent: float, active_workers: int, cpu_count: Optional[int] = None) -> float:
     """
@@ -93,6 +114,7 @@ def compute_worker_cpu_active(worker_cpu_percent: float, active_workers: int, cp
         cpu_count = get_system_logical_cpus()
     val = (float(worker_cpu_percent) * float(cpu_count)) / float(active_workers)
     return round(float(max(0.0, min(100.0, val))), 2)
+
 
 def get_controller_mode_label() -> str:
     """
@@ -133,6 +155,7 @@ def get_controller_mode_label() -> str:
     except Exception:
         return "Controller not running"
 
+
 # Defaults — overridable via CLI args (important for Docker deployments)
 _DEFAULT_COLLECTOR_URL    = "http://127.0.0.1:5000"
 _DEFAULT_INFERENCE_URL    = "http://127.0.0.1:5001"
@@ -146,7 +169,6 @@ _service_urls = {
     "alert":       _DEFAULT_ALERT_URL,
     "remediation": _DEFAULT_REMEDIATION_URL,
 }
-
 
 # Thread-safe cached state
 _cache_lock = threading.Lock()
@@ -197,6 +219,40 @@ def create_app(service_urls: dict = None):
 
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
+    # Module state for controller and launcher
+    valid_profiles = ["step", "ramp", "spike", "double_burst", "random_walk", "random_mix"]
+
+    launcher_state = {
+        "process": None,
+        "profile": None,
+        "seed": 44,
+        "duration_sec": 125,
+        "start_time": None,
+        "status": "idle",
+        "returncode": None,
+        "pid": None,
+        "last_elapsed": None,
+        "note": None,
+        "log_file": None,
+    }
+    launcher_lock = threading.Lock()
+    app.launcher_state = launcher_state
+    app.launcher_lock = launcher_lock
+
+    controller_mgmt = {
+        "process": None,
+        "mode": None,
+        "pid": None,
+        "start_time": None,
+        "log_file": None,
+    }
+    controller_lock = threading.Lock()
+
+    inference_mgmt = {
+        "process": None,
+        "pid": None,
+    }
+
     @app.route("/")
     @app.route("/overview")
     def overview():
@@ -225,11 +281,50 @@ def create_app(service_urls: dict = None):
     def experiments():
         return render_template("experiments.html", active_page="experiments")
 
+    @app.route("/api/dashboard/health", methods=["GET"])
+    def dashboard_health():
+        """B1. Health check for collector, inference, alert, remediation, and controller."""
+        results = {}
+        services = [
+            ("collector", f"{collector_url}/health", "python telemetry_collector.py --port 5000 --workers 2"),
+            ("inference", f"{inference_url}/health", "python inference_service.py --port 5001"),
+            ("alert", f"{alert_url}/health", "python alert_engine.py --port 5002"),
+            ("remediation", f"{remediation_url}/health", "python remediation_service.py --port 5003"),
+        ]
+        for name, url, cmd in services:
+            t0 = time.time()
+            online = False
+            latency = None
+            try:
+                r = _http_session.get(url, timeout=0.8)
+                if r.status_code == 200:
+                    online = True
+                    latency = round((time.time() - t0) * 1000.0, 1)
+            except Exception:
+                pass
+            results[name] = {
+                "status": "online" if online else "offline",
+                "latency_ms": latency,
+                "command": cmd,
+                "start_cmd": cmd,
+            }
+
+        # Controller health via controller_status.json
+        ctrl_mode = get_controller_mode_label()
+        ctrl_online = (ctrl_mode != "Controller not running")
+        results["controller"] = {
+            "status": "online" if ctrl_online else "offline",
+            "latency_ms": 0.0 if ctrl_online else None,
+            "command": "python demo_controller.py --mode predictive --initial-workers 2",
+            "start_cmd": "python demo_controller.py --mode predictive --initial-workers 2",
+            "mode_label": ctrl_mode,
+        }
+        return jsonify(results)
+
     @app.route("/api/dashboard/state", methods=["GET"])
     def get_state():
         global _cached_state
 
-        # Define all upstream fetches — fired in parallel via ThreadPoolExecutor
         fetches = {
             "telemetry_history":  f"{collector_url}/metrics/history?seconds=60",
             "prediction_history": f"{inference_url}/predictions/history?seconds=60",
@@ -248,21 +343,18 @@ def create_app(service_urls: dict = None):
                 results[key] = future.result()
 
         with _cache_lock:
-            # Telemetry
             telem_data = results.get("telemetry_history")
             if telem_data and telem_data.get("records"):
                 recs = telem_data["records"]
                 _cached_state["telemetry_history"] = recs
                 _cached_state["telemetry_latest"] = recs[-1]
 
-            # Inference
             pred_data = results.get("prediction_history")
             if pred_data and pred_data.get("predictions"):
                 preds = pred_data["predictions"]
                 _cached_state["prediction_history"] = preds
                 _cached_state["prediction_latest"] = preds[-1]
 
-            # Alert Engine
             if results.get("alert_latest"):
                 _cached_state["alert_status"] = results["alert_latest"]
             if results.get("alert_active"):
@@ -270,7 +362,6 @@ def create_app(service_urls: dict = None):
             if results.get("alert_history"):
                 _cached_state["alerts_history"] = results["alert_history"].get("alerts", [])
 
-            # Remediation
             if results.get("remediation"):
                 _cached_state["remediation"] = results["remediation"]
 
@@ -279,7 +370,12 @@ def create_app(service_urls: dict = None):
 
             snapshot = dict(_cached_state)
 
-        ctrl_events = _read_controller_events()
+        # C4. Show only controller_events.csv rows newer than current run's start
+        run_start_iso = None
+        if launcher_state.get("start_time"):
+            run_start_iso = datetime.fromtimestamp(launcher_state["start_time"], tz=timezone.utc).isoformat()
+
+        ctrl_events = _read_controller_events(since_iso=run_start_iso)
         ctrl_state = _read_controller_state()
         ctrl_status = _read_controller_status()
         snapshot["controller_events"] = ctrl_events
@@ -287,10 +383,40 @@ def create_app(service_urls: dict = None):
         snapshot["controller_status"] = ctrl_status
         snapshot["capacity"] = _cached_state.get("capacity", {})
 
-        # Mode label: read controller_status.json (show "Demo controller: <mode> (forecast online/offline)" or "Controller not running")
+        # Mode label from controller_status.json
         mode_label = get_controller_mode_label()
         snapshot["mode_label"] = mode_label
         snapshot["model_mode_label"] = mode_label
+
+        # B3. telemetry_age_sec and stale flag (true if newest sample is older than 5s)
+        telemetry_age_sec = None
+        stale = True
+        if snapshot.get("telemetry_latest"):
+            telem = snapshot["telemetry_latest"]
+            ts_str = telem.get("timestamp")
+            if ts_str:
+                try:
+                    ts_dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    now_dt = datetime.now(timezone.utc)
+                    telemetry_age_sec = round(max(0.0, (now_dt - ts_dt).total_seconds()), 2)
+                    stale = (telemetry_age_sec > 5.0)
+                except Exception:
+                    pass
+        snapshot["telemetry_age_sec"] = telemetry_age_sec
+        snapshot["stale"] = stale
+
+        # B5. Dynamic logical CPUs
+        logical_cpus = get_system_logical_cpus()
+        snapshot["logical_cpus"] = logical_cpus
+
+        # B5. Attach worker_cpu_per_active_pct to every record in history
+        for r in snapshot.get("telemetry_history", []):
+            if "worker_cpu_per_active_pct" not in r or r["worker_cpu_per_active_pct"] is None:
+                r["worker_cpu_per_active_pct"] = compute_worker_cpu_active(
+                    r.get("worker_cpu_percent", 0.0),
+                    r.get("active_workers", 2),
+                    cpu_count=logical_cpus
+                )
 
         worker_cpu_active = 0.0
         whole_cpu = 0.0
@@ -298,7 +424,7 @@ def create_app(service_urls: dict = None):
             telem = snapshot["telemetry_latest"]
             w_cpu = float(telem.get("worker_cpu_percent", 0.0))
             w_cnt = int(telem.get("active_workers", 2))
-            worker_cpu_active = compute_worker_cpu_active(w_cpu, w_cnt)
+            worker_cpu_active = compute_worker_cpu_active(w_cpu, w_cnt, cpu_count=logical_cpus)
             whole_cpu = float(telem.get("cpu_percent", 0.0))
 
         snapshot["worker_cpu_pct_active"] = worker_cpu_active
@@ -447,22 +573,137 @@ def create_app(service_urls: dict = None):
             return jsonify({"error": str(e)}), 500
 
     # ------------------------------------------------------------------
-    # P5. Scenario launcher backend
+    # PART C. Controller management endpoints
     # ------------------------------------------------------------------
-    valid_profiles = ["step", "ramp", "spike", "double_burst", "random_walk", "random_mix"]
-    launcher_state = {
-        "process": None,
-        "profile": None,
-        "seed": 44,
-        "duration_sec": 125,
-        "start_time": None,
-        "status": "idle",
-        "returncode": None,
-        "pid": None,
-        "last_elapsed": None,
-    }
-    launcher_lock = threading.Lock()
+    @app.route("/api/controller/status", methods=["GET"])
+    def controller_status():
+        with controller_lock:
+            proc = controller_mgmt["process"]
+            is_running = (proc is not None and proc.poll() is None)
+            return jsonify({
+                "status": "running" if is_running else "stopped",
+                "mode": controller_mgmt["mode"] if is_running else None,
+                "pid": proc.pid if is_running else None,
+            })
 
+    @app.route("/api/controller/start", methods=["POST"])
+    def controller_start():
+        data = request.get_json(silent=True) or {}
+        mode = str(data.get("mode", "predictive")).strip().lower()
+        if mode not in ("predictive", "reactive", "capacity_aware"):
+            return jsonify({"error": f"Invalid mode '{mode}'. Must be reactive, capacity_aware, or predictive"}), 400
+
+        with controller_lock:
+            proc = controller_mgmt["process"]
+            if proc is not None and proc.poll() is None:
+                return jsonify({
+                    "error": "Controller is already running",
+                    "mode": controller_mgmt["mode"],
+                    "pid": proc.pid,
+                }), 409
+
+            # C2. If predictive mode and inference is offline, spawn inference_service.py
+            if mode == "predictive":
+                inf_online = False
+                try:
+                    r_inf = _http_session.get(f"{inference_url}/health", timeout=1.0)
+                    if r_inf.status_code == 200:
+                        inf_online = True
+                except Exception:
+                    pass
+
+                if not inf_online:
+                    log.info("Predictive mode requested but inference offline. Spawning inference_service.py...")
+                    inf_env = os.environ.copy()
+                    inf_env["PERM_FORECASTER"] = "stagbdt"
+                    inf_cmd = [sys.executable, os.path.join(PROJECT_ROOT, "inference_service.py"), "--port", "5001"]
+                    try:
+                        inf_proc = subprocess.Popen(inf_cmd, cwd=PROJECT_ROOT, env=inf_env)
+                        inference_mgmt["process"] = inf_proc
+                        inference_mgmt["pid"] = inf_proc.pid
+
+                        t0 = time.time()
+                        while time.time() - t0 < 10.0:
+                            time.sleep(0.5)
+                            try:
+                                r_check = _http_session.get(f"{inference_url}/health", timeout=1.0)
+                                if r_check.status_code == 200:
+                                    inf_online = True
+                                    break
+                            except Exception:
+                                pass
+                            if inf_proc.poll() is not None:
+                                break
+                    except Exception as e:
+                        log.error("Failed to spawn inference_service: %s", e)
+
+                    if not inf_online:
+                        return jsonify({
+                            "error": "Inference service failed to start or become healthy within 10s; predictive mode aborted."
+                        }), 503
+
+            # Spawn demo_controller.py
+            results_dir = os.path.join(PROJECT_ROOT, "results")
+            os.makedirs(results_dir, exist_ok=True)
+            try:
+                log_file = open(CONTROLLER_LOG_PATH, "w", encoding="utf-8")
+                ctrl_cmd = [
+                    sys.executable,
+                    os.path.join(PROJECT_ROOT, "demo_controller.py"),
+                    "--mode", mode,
+                    "--initial-workers", "2",
+                    "--collector-url", collector_url,
+                    "--inference-url", inference_url,
+                ]
+                proc = subprocess.Popen(
+                    ctrl_cmd,
+                    cwd=PROJECT_ROOT,
+                    stdout=log_file,
+                    stderr=log_file,
+                )
+                controller_mgmt["process"] = proc
+                controller_mgmt["mode"] = mode
+                controller_mgmt["pid"] = proc.pid
+                controller_mgmt["start_time"] = time.time()
+                controller_mgmt["log_file"] = log_file
+
+                log.info("Demo controller started (mode=%s, PID %d)", mode, proc.pid)
+                return jsonify({
+                    "status": "running",
+                    "mode": mode,
+                    "pid": proc.pid,
+                    "message": f"Demo controller started in {mode} mode",
+                })
+            except Exception as e:
+                log.error("Failed to spawn demo_controller: %s", e)
+                return jsonify({"error": f"Failed to start controller: {e}"}), 500
+
+    @app.route("/api/controller/stop", methods=["POST"])
+    def controller_stop():
+        with controller_lock:
+            proc = controller_mgmt["process"]
+            if proc is not None and proc.poll() is None:
+                try:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=2.0)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=1.0)
+                except Exception as e:
+                    log.warning("Error stopping controller: %s", e)
+                if controller_mgmt.get("log_file"):
+                    try:
+                        controller_mgmt["log_file"].close()
+                    except Exception:
+                        pass
+                controller_mgmt["process"] = None
+                return jsonify({"status": "stopped", "message": "Demo controller stopped"})
+            return jsonify({"status": "stopped", "message": "No active controller running"})
+
+    # ------------------------------------------------------------------
+    # PART A. Scenario launcher backend
+    # ------------------------------------------------------------------
     def _update_launcher_status():
         with launcher_lock:
             proc = launcher_state["process"]
@@ -472,10 +713,29 @@ def create_app(service_urls: dict = None):
                     launcher_state["status"] = "running"
                 else:
                     launcher_state["returncode"] = ret
-                    if launcher_state["status"] == "running":
-                        launcher_state["status"] = "finished" if ret == 0 else "failed"
-                    if launcher_state["start_time"]:
-                        launcher_state["last_elapsed"] = round(time.time() - launcher_state["start_time"], 1)
+                    now = time.time()
+                    elapsed = (now - launcher_state["start_time"]) if launcher_state["start_time"] else 0.0
+                    launcher_state["last_elapsed"] = round(elapsed, 1)
+
+                    # A1. returncode 0 or 1 -> status "finished"; note on 1; other or <5s death -> "failed"
+                    if elapsed < 5.0 and ret != 0:
+                        launcher_state["status"] = "failed"
+                        launcher_state["note"] = f"Process died within 5s of start (exit code {ret})"
+                    elif ret == 0:
+                        launcher_state["status"] = "finished"
+                        launcher_state["note"] = None
+                    elif ret == 1:
+                        launcher_state["status"] = "finished"
+                        launcher_state["note"] = "Finished. Requests were dropped (expected during bursts)"
+                    else:
+                        launcher_state["status"] = "failed"
+                        launcher_state["note"] = f"Locust exited with error code {ret}"
+
+                    if launcher_state.get("log_file"):
+                        try:
+                            launcher_state["log_file"].close()
+                        except Exception:
+                            pass
                     launcher_state["process"] = None
 
     @app.route("/api/launcher/status", methods=["GET"])
@@ -488,6 +748,10 @@ def create_app(service_urls: dict = None):
                     elapsed = round(time.time() - launcher_state["start_time"], 1)
                 else:
                     elapsed = launcher_state.get("last_elapsed", None)
+
+            note = launcher_state.get("note")
+            msg = note or (f"Scenario run is {launcher_state['status']}" if launcher_state["status"] != "idle" else "Ready to launch scenario")
+
             return jsonify({
                 "status": launcher_state["status"],
                 "profile": launcher_state["profile"],
@@ -495,6 +759,9 @@ def create_app(service_urls: dict = None):
                 "duration_sec": launcher_state["duration_sec"],
                 "elapsed_sec": elapsed,
                 "returncode": launcher_state["returncode"],
+                "note": note,
+                "message": msg,
+                "log_tail": _read_launcher_log_tail(15),
                 "pid": launcher_state["pid"] if launcher_state["status"] == "running" else None,
                 "valid_profiles": valid_profiles,
             })
@@ -523,14 +790,53 @@ def create_app(service_urls: dict = None):
             except (ValueError, TypeError):
                 seed = 44
 
-            try:
-                duration = int(data.get("duration", 125))
-                if duration <= 0:
-                    duration = 125
-            except (ValueError, TypeError):
-                duration = 125
-
             target_host = str(data.get("host", collector_url)).strip() or collector_url
+
+            # A3. Preflight check 1: collector /health reachable at target_host
+            try:
+                r_health = _http_session.get(f"{target_host}/health", timeout=1.5)
+                if r_health.status_code != 200:
+                    return jsonify({
+                        "error": f"Collector not reachable at {target_host}. Start: python telemetry_collector.py --port 5000 --workers 2"
+                    }), 503
+            except Exception:
+                return jsonify({
+                    "error": f"Collector not reachable at {target_host}. Start: python telemetry_collector.py --port 5000 --workers 2"
+                }), 503
+
+            # A3. Preflight check 2: locust in sys.executable
+            if importlib.util.find_spec("locust") is None:
+                return jsonify({
+                    "error": f"locust is not installed in interpreter '{sys.executable}'. Run: python -m pip install locust"
+                }), 500
+
+            # A3. Preflight check 3: locustfile_perm.py exists
+            locustfile_path = os.path.join(PROJECT_ROOT, "locustfile_perm.py")
+            if not os.path.exists(locustfile_path):
+                return jsonify({
+                    "error": f"locustfile_perm.py not found at {locustfile_path}"
+                }), 500
+
+            # A4. Duration derivation: total_dur + 5s
+            req_duration = data.get("duration")
+            if req_duration is None or int(req_duration) <= 0:
+                try:
+                    import burst_test
+                    _, _, total_dur = burst_test.generate_schedule(profile, seed)
+                    duration = int(total_dur + 5.0)
+                except Exception:
+                    duration = 125
+            else:
+                duration = int(req_duration)
+
+            # C3. Run with controller if requested
+            if data.get("run_with_controller"):
+                ctrl_mode = str(data.get("controller_mode", "predictive")).strip().lower()
+                try:
+                    with app.test_client() as c:
+                        c.post("/api/controller/start", json={"mode": ctrl_mode})
+                except Exception as e:
+                    log.warning("Could not auto-start controller: %s", e)
 
             loc_env = os.environ.copy()
             loc_env["PERM_PROFILE"] = profile
@@ -541,7 +847,7 @@ def create_app(service_urls: dict = None):
                 "-m",
                 "locust",
                 "-f",
-                os.path.join(PROJECT_ROOT, "locustfile_perm.py"),
+                locustfile_path,
                 "--headless",
                 "-u",
                 "1",
@@ -553,13 +859,17 @@ def create_app(service_urls: dict = None):
                 target_host,
             ]
 
+            results_dir = os.path.join(PROJECT_ROOT, "results")
+            os.makedirs(results_dir, exist_ok=True)
+            log_file = open(LAUNCHER_LOG_PATH, "w", encoding="utf-8")
+
             try:
                 proc = subprocess.Popen(
                     cmd,
                     cwd=PROJECT_ROOT,
                     env=loc_env,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
+                    stdout=log_file,
+                    stderr=log_file,
                 )
                 launcher_state["process"] = proc
                 launcher_state["profile"] = profile
@@ -570,7 +880,10 @@ def create_app(service_urls: dict = None):
                 launcher_state["returncode"] = None
                 launcher_state["pid"] = proc.pid
                 launcher_state["last_elapsed"] = None
-                log.info("Launcher started Locust for profile=%s seed=%d (PID %d)", profile, seed, proc.pid)
+                launcher_state["note"] = None
+                launcher_state["log_file"] = log_file
+
+                log.info("Launcher started Locust for profile=%s seed=%d (PID %d, duration=%ds)", profile, seed, proc.pid, duration)
                 return jsonify({
                     "status": "running",
                     "profile": profile,
@@ -585,6 +898,7 @@ def create_app(service_urls: dict = None):
 
     @app.route("/api/launcher/stop", methods=["POST"])
     def launcher_stop():
+        data = request.get_json(silent=True) or {}
         with launcher_lock:
             proc = launcher_state["process"]
             if proc is not None and proc.poll() is None:
@@ -602,19 +916,27 @@ def create_app(service_urls: dict = None):
                     launcher_state["last_elapsed"] = round(time.time() - launcher_state["start_time"], 1)
                 launcher_state["status"] = "stopped"
                 launcher_state["returncode"] = proc.poll()
+                if launcher_state.get("log_file"):
+                    try:
+                        launcher_state["log_file"].close()
+                    except Exception:
+                        pass
                 launcher_state["process"] = None
                 log.info("Launcher stopped scenario %s", launcher_state.get("profile"))
-                return jsonify({
-                    "status": "stopped",
-                    "profile": launcher_state["profile"],
-                    "message": "Scenario run stopped successfully",
-                })
-            else:
-                return jsonify({
-                    "status": launcher_state["status"],
-                    "profile": launcher_state["profile"],
-                    "message": "No active scenario run to stop",
-                })
+
+        # C3. Stop controller as well if requested (default: True)
+        if data.get("stop_controller", True):
+            try:
+                with app.test_client() as c:
+                    c.post("/api/controller/stop")
+            except Exception:
+                pass
+
+        return jsonify({
+            "status": "stopped",
+            "profile": launcher_state.get("profile"),
+            "message": "Scenario run stopped successfully",
+        })
 
     return app
 

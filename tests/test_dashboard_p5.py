@@ -46,8 +46,14 @@ class TestDashboardP5Launcher(unittest.TestCase):
         data = resp.get_json()
         self.assertIn("error", data)
 
+    @patch("web_dashboard.app._http_session.get")
     @patch("subprocess.Popen")
-    def test_launcher_start_and_conflict_refusal(self, mock_popen):
+    def test_launcher_start_and_conflict_refusal(self, mock_popen, mock_get):
+        # Mock collector health check 200
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_get.return_value = mock_resp
+
         # Mock active process
         mock_proc = MagicMock()
         mock_proc.poll.return_value = None  # None indicates still running

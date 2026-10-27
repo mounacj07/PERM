@@ -1,560 +1,412 @@
-/* =========================================================
-   PERM Edge Control Center — Dashboard JS
-   - Red forecast line plotted 30s AHEAD of current telemetry
-   - Animated toast notifications for scaling events
-   - Pulsing alert overlay when thresholds are crossed
-   ========================================================= */
+/**
+ * PERM Web Dashboard — Ops Console Engine (dashboard.js)
+ * Clean, unified, single-script dashboard client without CDN dependencies.
+ * Handles:
+ *  - Custom Chart.js annotation plugin (bands, reference lines, vertical markers)
+ *  - Rolling 90s time window charts (maintainAspectRatio: false, no animation)
+ *  - Service health poller & click-to-view start command modal
+ *  - Stale / empty state chart overlays
+ *  - Scenario launcher & controller controls
+ */
 
-let cpuChart = null;
-let latChart = null;
-let activePendingRequestId = null;
-let isPolling = false;
-let _lastScalingHistoryLen = 0;
-let _lastAlertHistoryLen = 0;
+// ─── CHART.JS CUSTOM PLUGIN FOR BANDS & VERTICAL MARKERS ───
+const permAnnotationsPlugin = {
+  id: 'permAnnotations',
+  beforeDraw(chart, args, options) {
+    if (!options) return;
+    const { ctx, chartArea, scales } = chart;
+    if (!chartArea || !scales || !scales.y) return;
 
-document.addEventListener('DOMContentLoaded', () => {
-  initCharts();
-  scheduleNextPoll(0);
-});
+    ctx.save();
 
-function scheduleNextPoll(delayMs = 1000) {
-  setTimeout(async () => {
-    await pollDashboardState();
-    scheduleNextPoll(1000);
-  }, delayMs);
+    // 1. Horizontal Shaded Bands (e.g. 70%-85% warning band, 85%-100% crit band)
+    if (Array.isArray(options.bands)) {
+      options.bands.forEach(band => {
+        const yTopVal = band.yMax !== undefined ? band.yMax : scales.y.max;
+        const yBotVal = band.yMin !== undefined ? band.yMin : scales.y.min;
+        const yTop = scales.y.getPixelForValue(yTopVal);
+        const yBot = scales.y.getPixelForValue(yBotVal);
+        const height = yBot - yTop;
+        if (height > 0) {
+          ctx.fillStyle = band.color || 'rgba(255,255,255,0.04)';
+          ctx.fillRect(chartArea.left, yTop, chartArea.width, height);
+        }
+      });
+    }
+
+    // 2. Horizontal Reference Lines (e.g. SLO 300ms, 70% threshold)
+    if (Array.isArray(options.lines)) {
+      options.lines.forEach(line => {
+        if (line.y === undefined) return;
+        const yPix = scales.y.getPixelForValue(line.y);
+        if (yPix >= chartArea.top && yPix <= chartArea.bottom) {
+          ctx.beginPath();
+          ctx.strokeStyle = line.color || '#ef4444';
+          ctx.lineWidth = line.width || 1;
+          if (line.dash) {
+            ctx.setLineDash(line.dash);
+          } else {
+            ctx.setLineDash([]);
+          }
+          ctx.moveTo(chartArea.left, yPix);
+          ctx.lineTo(chartArea.right, yPix);
+          ctx.stroke();
+
+          if (line.label) {
+            ctx.font = '10px system-ui, sans-serif';
+            ctx.fillStyle = line.color || '#ef4444';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(line.label, chartArea.right - 4, yPix - 2);
+          }
+        }
+      });
+    }
+
+    // 3. Vertical Markers (Burst start, scaling actions)
+    if (Array.isArray(options.verticalMarkers)) {
+      options.verticalMarkers.forEach(vm => {
+        if (!vm.timestamp || !scales.x) return;
+        // Find x coordinate from timestamp label
+        const labels = chart.data.labels || [];
+        const idx = labels.indexOf(vm.timestamp);
+        if (idx !== -1) {
+          const xPix = scales.x.getPixelForValue(idx);
+          if (xPix >= chartArea.left && xPix <= chartArea.right) {
+            ctx.beginPath();
+            ctx.strokeStyle = vm.color || '#38bdf8';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([3, 3]);
+            ctx.moveTo(xPix, chartArea.top);
+            ctx.lineTo(xPix, chartArea.bottom);
+            ctx.stroke();
+
+            if (vm.label) {
+              ctx.font = '9px system-ui, sans-serif';
+              ctx.fillStyle = vm.color || '#38bdf8';
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              ctx.fillText(vm.label, xPix, chartArea.top + 2);
+            }
+          }
+        }
+      });
+    }
+
+    ctx.restore();
+  }
+};
+
+// Register plugin globally if Chart is available
+if (typeof Chart !== 'undefined') {
+  Chart.register(permAnnotationsPlugin);
 }
 
-/* ─── CHART INIT ──────────────────────────────────────────── */
-function initCharts() {
-  const commonOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    interaction: { mode: 'index', intersect: false },
-    scales: {
-      x: {
-        grid: { color: 'rgba(255,255,255,0.03)', drawBorder: false },
-        ticks: { color: '#64748b', font: { family: 'Inter', size: 10 }, maxTicksLimit: 12, maxRotation: 0 }
-      },
-      y: {
-        grid: { color: 'rgba(255,255,255,0.04)', drawBorder: false },
-        ticks: { color: '#64748b', font: { family: 'Inter', size: 10 } }
-      }
-    },
-    plugins: {
-      legend: {
-        position: 'top', align: 'end',
-        labels: {
-          color: '#cbd5e1',
-          font: { family: 'Inter', size: 11, weight: '500' },
-          boxWidth: 10, usePointStyle: true, pointStyle: 'circle'
+// ─── GLOBAL PERM DASHBOARD CONTROLLER ───
+window.PERM = {
+  isPollingState: false,
+  isPollingHealth: false,
+  latestState: null,
+  latestHealth: null,
+  activeRunStartTime: null,
+
+  // Formatters
+  formatTime(isoOrSec) {
+    if (!isoOrSec) return '--:--:--';
+    if (typeof isoOrSec === 'number') {
+      const d = new Date(isoOrSec * 1000);
+      return d.toTimeString().split(' ')[0];
+    }
+    try {
+      const d = new Date(isoOrSec);
+      if (isNaN(d.getTime())) return String(isoOrSec).substring(11, 19) || isoOrSec;
+      return d.toTimeString().split(' ')[0];
+    } catch (e) {
+      return String(isoOrSec);
+    }
+  },
+
+  formatRelativeTime(ts) {
+    if (!ts) return '';
+    try {
+      const t = typeof ts === 'number' ? (ts > 1e11 ? ts : ts * 1000) : new Date(ts).getTime();
+      const diffSec = Math.round((Date.now() - t) / 1000);
+      if (diffSec < 2) return 'just now';
+      if (diffSec < 60) return `${diffSec}s ago`;
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return `${diffMin}m ago`;
+      return `${Math.floor(diffMin / 60)}h ago`;
+    } catch (e) {
+      return '';
+    }
+  },
+
+  escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  },
+
+  computeStats(arr) {
+    if (!arr || arr.length === 0) return { min: 0, mean: 0, max: 0 };
+    const valid = arr.filter(n => typeof n === 'number' && !isNaN(n));
+    if (valid.length === 0) return { min: 0, mean: 0, max: 0 };
+    let min = valid[0];
+    let max = valid[0];
+    let sum = 0;
+    for (let i = 0; i < valid.length; i++) {
+      if (valid[i] < min) min = valid[i];
+      if (valid[i] > max) max = valid[i];
+      sum += valid[i];
+    }
+    return { min, mean: sum / valid.length, max };
+  },
+
+  // Common Chart Configuration Factory
+  createStandardChartOptions(customOptions = {}) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { left: 0, right: 8, top: 4, bottom: 0 } },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false },
+          ticks: {
+            color: '#71717a',
+            font: { family: 'system-ui, sans-serif', size: 10 },
+            maxTicksLimit: 8,
+            maxRotation: 0,
+            autoSkip: true
+          }
+        },
+        y: {
+          grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+          ticks: {
+            color: '#71717a',
+            font: { family: 'system-ui, sans-serif', size: 10 }
+          }
         }
       },
-      tooltip: {
-        backgroundColor: '#0f172a', titleColor: '#f8fafc', bodyColor: '#cbd5e1',
-        borderColor: '#1e293b', borderWidth: 1, padding: 10, cornerRadius: 6,
-        titleFont: { family: 'Inter', size: 11, weight: '600' },
-        bodyFont: { family: 'JetBrains Mono', size: 11 }
-      }
-    }
-  };
-
-  const ctxCpu = document.getElementById('chart-cpu').getContext('2d');
-  cpuChart = new Chart(ctxCpu, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: 'Telemetry CPU % (1s)',
-          data: [],
-          borderColor: '#38bdf8',
-          borderWidth: 2.5,
-          pointRadius: 0,
-          tension: 0.3,
-          fill: true,
-          backgroundColor: 'rgba(56, 189, 248, 0.07)',
-          order: 2
+      plugins: {
+        legend: {
+          position: 'top',
+          align: 'end',
+          labels: {
+            color: '#a1a1aa',
+            font: { family: 'system-ui, sans-serif', size: 11, weight: '500' },
+            boxWidth: 10,
+            boxHeight: 10,
+            usePointStyle: true,
+            pointStyle: 'circle'
+          }
         },
-        {
-          label: '30s ML Forecast ↗',
-          data: [],
-          borderColor: '#f43f5e',
-          borderWidth: 2.5,
-          borderDash: [5, 3],
-          pointRadius: 0,
-          tension: 0.3,
-          fill: false,
-          spanGaps: true,
-          order: 1
-        },
-        {
-          label: 'SLO Warning (70%)',
-          data: [],
-          borderColor: 'rgba(245, 158, 11, 0.55)',
+        tooltip: {
+          backgroundColor: '#1b1b20',
+          titleColor: '#f4f4f5',
+          bodyColor: '#a1a1aa',
+          borderColor: '#27272a',
           borderWidth: 1,
-          borderDash: [2, 4],
-          pointRadius: 0,
-          order: 3
-        },
-        {
-          label: 'SLO Critical (85%)',
-          data: [],
-          borderColor: 'rgba(244, 63, 94, 0.55)',
-          borderWidth: 1,
-          borderDash: [2, 4],
-          pointRadius: 0,
-          order: 3
+          padding: 8,
+          cornerRadius: 6,
+          titleFont: { family: 'system-ui, sans-serif', size: 11, weight: '600' },
+          bodyFont: { family: 'ui-monospace, monospace', size: 11 }
         }
-      ]
-    },
-    options: {
-      ...commonOptions,
-      scales: { ...commonOptions.scales, y: { ...commonOptions.scales.y, min: 0, max: 105 } }
-    }
-  });
+      },
+      ...customOptions
+    };
+  },
 
-  const ctxLat = document.getElementById('chart-lat').getContext('2d');
-  latChart = new Chart(ctxLat, {
-    type: 'line',
-    data: {
-      labels: [],
-      datasets: [
-        {
-          label: 'Telemetry Latency (ms)',
-          data: [],
-          borderColor: '#10b981',
-          borderWidth: 2.5,
-          pointRadius: 0,
-          tension: 0.3,
-          fill: true,
-          backgroundColor: 'rgba(16, 185, 129, 0.07)',
-          order: 2
-        },
-        {
-          label: '30s ML Forecast ↗',
-          data: [],
-          borderColor: '#fbbf24',
-          borderWidth: 2.5,
-          borderDash: [5, 3],
-          pointRadius: 0,
-          tension: 0.3,
-          fill: false,
-          spanGaps: true,
-          order: 1
-        },
-        {
-          label: 'SLO Warning (150ms)',
-          data: [],
-          borderColor: 'rgba(245, 158, 11, 0.55)',
-          borderWidth: 1,
-          borderDash: [2, 4],
-          pointRadius: 0,
-          order: 3
-        },
-        {
-          label: 'SLO Critical (300ms)',
-          data: [],
-          borderColor: 'rgba(244, 63, 94, 0.55)',
-          borderWidth: 1,
-          borderDash: [2, 4],
-          pointRadius: 0,
-          order: 3
+  // ─── TOPBAR SERVICE HEALTH MODAL ───
+  showServiceCommand(serviceKey) {
+    if (!this.latestHealth) return;
+    const item = this.latestHealth[serviceKey];
+    if (!item) return;
+
+    const modal = document.getElementById('serviceModal');
+    const title = document.getElementById('modalServiceTitle');
+    const status = document.getElementById('modalServiceStatus');
+    const lat = document.getElementById('modalServiceLatency');
+    const cmd = document.getElementById('modalServiceCmd');
+
+    if (!modal) return;
+
+    const nameMap = {
+      collector: 'Telemetry Collector (Port 5000)',
+      inference: 'ML Inference Service (Port 5001)',
+      alert: 'Alert Engine (Port 5002)',
+      remediation: 'Remediation Service (Port 5003)',
+      controller: 'PERM Demo Controller'
+    };
+
+    if (title) title.innerText = nameMap[serviceKey] || serviceKey.toUpperCase();
+    if (status) {
+      status.innerText = item.status ? item.status.toUpperCase() : 'UNKNOWN';
+      status.className = item.status === 'online' ? 'status-badge status-badge-ok' : 'status-badge status-badge-crit';
+    }
+    if (lat) {
+      lat.innerText = item.latency_ms !== null && item.latency_ms !== undefined ? `${item.latency_ms.toFixed(1)} ms` : '—';
+    }
+    if (cmd) {
+      cmd.innerText = item.start_cmd || '# No command provided';
+    }
+
+    modal.style.display = 'flex';
+  },
+
+  closeServiceModal() {
+    const modal = document.getElementById('serviceModal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  copyModalCmd() {
+    const cmd = document.getElementById('modalServiceCmd');
+    if (cmd && navigator.clipboard) {
+      navigator.clipboard.writeText(cmd.innerText).then(() => {
+        const btn = document.getElementById('modalCopyBtn');
+        if (btn) {
+          const old = btn.innerText;
+          btn.innerText = 'Copied!';
+          setTimeout(() => { btn.innerText = old; }, 1500);
         }
-      ]
-    },
-    options: commonOptions
-  });
-}
-
-/* ─── POLL ────────────────────────────────────────────────── */
-async function pollDashboardState() {
-  if (isPolling) return;
-  isPolling = true;
-  try {
-    const resp = await fetch('/api/dashboard/state');
-    if (!resp.ok) return;
-    const data = await resp.json();
-
-    updateMetrics(data);
-    updateCharts(data);
-    updateRemediation(data.remediation, data.controller_events);
-    updateAlertsTable(data.alerts_history, data.controller_events);
-    checkForNewScalingEvents(data.remediation);
-    checkForNewAlerts(data.active_alerts, data.alerts_history);
-  } catch (err) {
-    console.debug('Dashboard fetch error:', err);
-  } finally {
-    isPolling = false;
-  }
-}
-
-/* ─── METRICS ─────────────────────────────────────────────── */
-function updateMetrics(data) {
-  const telem = data.telemetry_latest || {};
-  const pred  = data.prediction_latest || {};
-  const remed = data.remediation || {};
-  const ctrlState = data.controller_state || {};
-
-  // Controller mode badge
-  if (ctrlState.mode) {
-    const badge = document.getElementById('controller-mode-badge');
-    if (badge) badge.innerText = ctrlState.mode.toUpperCase();
-  }
-
-  // Pool utilization main gauge
-  const poolUtil = (data.pool_utilization !== undefined)
-    ? data.pool_utilization
-    : (telem.worker_cpu_percent !== undefined
-        ? Math.min(100.0, Math.max(0.0, (telem.worker_cpu_percent * 16.0) / Math.max(1, telem.active_workers || 2)))
-        : 0.0);
-
-  const elCpu = document.getElementById('val-cpu');
-  if (elCpu) {
-    elCpu.innerText = `${poolUtil.toFixed(1)}%`;
-    elCpu.style.color = poolUtil >= 85 ? '#f43f5e'
-                      : poolUtil >= 70 ? '#f59e0b'
-                      : '#38bdf8';
-  }
-
-  if (telem.avg_latency_ms !== undefined) {
-    document.getElementById('val-lat').innerText = `${telem.avg_latency_ms.toFixed(1)} ms`;
-  }
-  if (pred.predicted_latency_30s !== undefined) {
-    const predLat = pred.predicted_latency_30s.toFixed(1);
-    const drivers = (pred.top_drivers_latency || []).slice(0,2)
-      .map(d => `<span class="driver-pill mono">⚡ ${d}</span>`).join(' ');
-    const color = pred.predicted_latency_30s >= 300 ? '#f43f5e'
-                : pred.predicted_latency_30s >= 150 ? '#f59e0b'
-                : '#94a3b8';
-    document.getElementById('sub-lat').innerHTML =
-      `<span style="color:${color};font-weight:700;">${predLat} ms</span> ${drivers}`;
-  }
-
-  const activeWorkers = (ctrlState.current_workers !== undefined)
-    ? ctrlState.current_workers
-    : (telem.active_workers || remed.active_workers || 2);
-  document.getElementById('val-workers').innerText = `${activeWorkers} / 8`;
-  document.getElementById('sub-workers').innerText =
-    `Mode: ${ctrlState.mode ? ctrlState.mode.toUpperCase() : 'DEMO CONTROLLER'}`;
-
-  // System health badge
-  const ctrlEvents = data.controller_events || [];
-  const alertState = ctrlState.alert_state || 'NORMAL';
-  const statusEl   = document.getElementById('val-status');
-  const subAlertsEl = document.getElementById('sub-alerts');
-
-  if (alertState === 'CRITICAL') {
-    statusEl.innerHTML = `<span class="status-badge status-badge-crit pulse-badge">🔴 POOL CRITICAL (≥85%)</span>`;
-    subAlertsEl.innerText = 'Pool Utilization Critical';
-  } else if (alertState === 'WARN') {
-    statusEl.innerHTML = `<span class="status-badge status-badge-warn pulse-badge">🟡 POOL WARNING (≥70%)</span>`;
-    subAlertsEl.innerText = 'Pool Utilization Warning';
-  } else {
-    statusEl.innerHTML = `<span class="status-badge status-badge-ok">✅ SYSTEM NORMAL</span>`;
-    subAlertsEl.innerText = 'Pool Utilization < 70%';
-  }
-}
-
-/* ─── CHARTS — Smooth Leading Forecast Line & 30s Future Zone ── */
-function updateCharts(data) {
-  const telemHistory = data.telemetry_history || [];
-  const predHistory  = data.prediction_history || [];
-  if (telemHistory.length === 0) return;
-
-  const lastTelemTs = new Date(telemHistory[telemHistory.length - 1].timestamp).getTime();
-
-  // Create timeline: telemetry history + 30s into the future (5s steps)
-  const fullTimeline = [...telemHistory.map(r => new Date(r.timestamp).getTime())];
-  const lastTs = fullTimeline[fullTimeline.length - 1];
-  for (let i = 1; i <= 6; i++) {  // 6 steps × 5s = +30s future zone
-    fullTimeline.push(lastTs + i * 5000);
-  }
-
-  const labels = fullTimeline.map(ts => {
-    const t = new Date(ts);
-    return t.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-  });
-
-  // Pool utilization actuals (null for future points)
-  const cpuActual = fullTimeline.map((ts, idx) => {
-    if (idx < telemHistory.length) {
-      const r = telemHistory[idx];
-      const wCpu = r.worker_cpu_percent !== undefined ? r.worker_cpu_percent : (r.cpu_percent || 0);
-      const wCount = r.active_workers || 2;
-      return Math.min(100.0, Math.max(0.0, (wCpu * 16.0) / Math.max(1, wCount)));
+      });
     }
-    return null;
-  });
-  const latActual = fullTimeline.map((ts, idx) =>
-    idx < telemHistory.length ? telemHistory[idx].avg_latency_ms : null
-  );
+  },
 
-  const cpuWarn = new Array(labels.length).fill(70);
-  const cpuCrit = new Array(labels.length).fill(85);
-  const latWarn = new Array(labels.length).fill(150);
-  const latCrit = new Array(labels.length).fill(300);
-
-  // Latest generated prediction (used for Future Zone projection)
-  const latestPred = predHistory.length > 0 ? predHistory[predHistory.length - 1] : null;
-
-  // ── CPU FORECAST ───────────────────────────────────────────────────
-  let lastCpuPred = null;
-  const cpuForecast = fullTimeline.map((ts, idx) => {
-    if (idx >= telemHistory.length && latestPred) {
-      return latestPred.predicted_cpu_30s;
+  // ─── HEALTH POLLING ───
+  async pollHealth() {
+    try {
+      const resp = await fetch('/api/dashboard/health');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      this.latestHealth = data;
+      this.renderServicePills(data);
+    } catch (e) {
+      console.debug('Health poll error:', e);
     }
-    const match = predHistory.find(p => Math.abs(new Date(p.timestamp).getTime() - ts) <= 4000)
-               || predHistory.find(p => {
-                    const targetTs = p.target_timestamp_30s ? new Date(p.target_timestamp_30s).getTime() : 0;
-                    return Math.abs(targetTs - ts) <= 4000;
-                  });
-    if (match) lastCpuPred = match.predicted_cpu_30s;
-    return match ? match.predicted_cpu_30s : lastCpuPred;
-  });
+  },
 
-  // ── LATENCY FORECAST ───────────────────────────────────────────────
-  let lastLatPred = null;
-  const latForecast = fullTimeline.map((ts, idx) => {
-    if (idx >= telemHistory.length && latestPred) {
-      return latestPred.predicted_latency_30s;
-    }
-    const match = predHistory.find(p => Math.abs(new Date(p.timestamp).getTime() - ts) <= 4000)
-               || predHistory.find(p => {
-                    const targetTs = p.target_timestamp_30s ? new Date(p.target_timestamp_30s).getTime() : 0;
-                    return Math.abs(targetTs - ts) <= 4000;
-                  });
-    if (match) lastLatPred = match.predicted_latency_30s;
-    return match ? match.predicted_latency_30s : lastLatPred;
-  });
+  renderServicePills(health) {
+    const services = ['collector', 'inference', 'alert', 'remediation', 'controller'];
+    services.forEach(key => {
+      const pill = document.getElementById(`pill-${key}`);
+      if (!pill) return;
+      const info = health[key];
+      if (!info) return;
 
-  cpuChart.data.labels           = labels;
-  cpuChart.data.datasets[0].label = 'Pool Utilization % (3s smoothed)';
-  cpuChart.data.datasets[0].data = cpuActual;
-  cpuChart.data.datasets[1].data = cpuForecast;
-  cpuChart.data.datasets[2].data = cpuWarn;
-  cpuChart.data.datasets[3].data = cpuCrit;
-  cpuChart.update('none');
+      const isOnline = info.status === 'online';
+      pill.className = `service-pill ${isOnline ? 'online' : 'offline'}`;
+      pill.title = `${key.toUpperCase()}: ${info.status} (${info.latency_ms !== null ? info.latency_ms + 'ms' : 'unreachable'})\nClick to view start command`;
+    });
+  },
 
-  latChart.data.labels           = labels;
-  latChart.data.datasets[0].data = latActual;
-  latChart.data.datasets[1].data = latForecast;
-  latChart.data.datasets[2].data = latWarn;
-  latChart.data.datasets[3].data = latCrit;
-  latChart.update('none');
-}
+  // ─── TOPBAR ACTIVE SCENARIO CHIP ───
+  updateScenarioChip(launcherStatus) {
+    const chip = document.getElementById('topbarScenarioChip');
+    const label = document.getElementById('topbarScenarioLabel');
+    const bar = document.getElementById('topbarScenarioProgress');
+    if (!chip || !label) return;
 
-/* ─── REMEDIATION & SCALING AUDIT LOG ─────────────────────── */
-function updateRemediation(remed, controllerEvents) {
-  if (controllerEvents && controllerEvents.length > 0) {
-    const scaleList = controllerEvents.filter(e => ['SCALE_UP', 'SCALE_DOWN'].includes(e.type));
-    const tblHistory = document.getElementById('tbl-history');
-    if (scaleList.length === 0) {
-      tblHistory.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No scaling events logged yet</td></tr>`;
-    } else {
-      tblHistory.innerHTML = scaleList.slice(-10).reverse().map(h => {
-        const t = new Date(h.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-        const badge = h.type === 'SCALE_UP'
-          ? '<span class="tag-auto mono" style="color:#10b981;">SCALE_UP</span>'
-          : '<span class="tag-manual mono" style="color:#f59e0b;">SCALE_DOWN</span>';
-        const rulePart = (h.reason && h.reason.includes('rule=')) ? h.reason.split(';')[0].replace('rule=', '') : 'reactive';
-        return `<tr>
-          <td class="mono">${t}</td>
-          <td>${badge}</td>
-          <td class="mono" style="font-weight:600;">${h.value} workers</td>
-          <td class="mono" style="color:var(--color-primary);">${rulePart}</td>
-          <td style="color:var(--text-muted);font-size:0.75rem;">${h.reason}</td>
-        </tr>`;
-      }).join('');
-    }
-  }
-}
-
-/* ─── ALERTS TABLE (controller_events.csv) ────────────────── */
-function updateAlertsTable(alerts, controllerEvents) {
-  const tbl = document.getElementById('tbl-alerts');
-  if (controllerEvents && controllerEvents.length > 0) {
-    const alertList = controllerEvents.filter(e => ['WARN', 'CRITICAL', 'RECOVERY'].includes(e.type));
-    if (alertList.length === 0) {
-      tbl.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No controller alerts logged yet</td></tr>`;
+    if (!launcherStatus || launcherStatus.status === 'idle') {
+      label.innerText = 'No Scenario Running';
+      chip.className = 'scenario-chip idle';
+      if (bar) bar.style.width = '0%';
       return;
     }
-    tbl.innerHTML = alertList.slice(-10).reverse().map(a => {
-      const t = new Date(a.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-      const badge = a.type === 'CRITICAL'
-        ? '<span class="status-badge status-badge-crit">CRITICAL</span>'
-        : (a.type === 'WARN'
-            ? '<span class="status-badge status-badge-warn">WARN</span>'
-            : '<span class="status-badge status-badge-ok">RECOVERY</span>');
-      return `<tr>
-        <td class="mono">${t}</td>
-        <td>${badge}</td>
-        <td class="mono">${a.signal || 'pool_utilization'}</td>
-        <td class="mono" style="font-weight:600;">${a.value}%</td>
-        <td style="color:var(--text-main);">${a.reason || ''}</td>
-      </tr>`;
-    }).join('');
-    return;
-  }
 
-  if (!alerts || alerts.length === 0) {
-    tbl.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No active alerts recorded</td></tr>`;
-    return;
-  }
-  tbl.innerHTML = alerts.slice(-8).reverse().map(a => {
-    const t = new Date(a.timestamp).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-    const badge = a.severity === 'CRITICAL'
-      ? '<span class="status-badge status-badge-crit">CRITICAL</span>'
-      : '<span class="status-badge status-badge-warn">WARNING</span>';
-    return `<tr>
-      <td class="mono">${t}</td>
-      <td style="font-weight:500;">${a.metric}</td>
-      <td>${badge}</td>
-      <td class="mono">${typeof a.forecast_value_30s === 'number' ? a.forecast_value_30s.toFixed(1) : a.forecast_value_30s}</td>
-      <td class="mono" style="color:var(--color-primary);font-weight:600;">~${a.lead_time_sec}s</td>
-    </tr>`;
-  }).join('');
-}
+    if (launcherStatus.status === 'running') {
+      const profile = (launcherStatus.profile || 'run').toUpperCase();
+      const elapsed = (launcherStatus.elapsed_sec || 0).toFixed(0);
+      const target = (launcherStatus.duration_sec || 65).toFixed(0);
+      const isBurst = launcherStatus.is_burst ? 'BURST' : 'CALM';
+      label.innerHTML = `<strong>${profile}</strong> [${isBurst}] ${elapsed}s / ${target}s`;
+      chip.className = 'scenario-chip running';
 
-/* ─── NEW SCALING EVENT → TOAST ───────────────────────────── */
-function checkForNewScalingEvents(remed) {
-  if (!remed) return;
-  const history = remed.scaling_history || [];
-  if (history.length > _lastScalingHistoryLen) {
-    const latest = history[0]; // status endpoint returns scaling_history reversed (latest at index 0)
-    if (latest) showScalingToast(latest);
-  }
-  _lastScalingHistoryLen = history.length;
-}
+      if (bar) {
+        const pct = Math.min(100, Math.max(0, ((launcherStatus.elapsed_sec || 0) / (launcherStatus.duration_sec || 65)) * 100));
+        bar.style.width = `${pct}%`;
+      }
+      return;
+    }
 
-function showScalingToast(event) {
-  if (event.status === 'DECLINED') {
-    const icon     = '⚠️';
-    const colorCls = 'toast-warning';
-    const title    = 'Manual Scaling Declined';
-    const body     = `Operator dismissed scaling proposal — capacity remains constrained at ${event.workers_before} cores.`;
-    const sub      = 'Expect CPU saturation & latency queuing bottleneck under load.';
-    _spawnToast(icon, title, body, sub, colorCls, 8000);
-    return;
-  }
+    if (launcherStatus.status === 'finished') {
+      label.innerText = `Finished (${launcherStatus.profile || ''})`;
+      chip.className = 'scenario-chip finished';
+      if (bar) bar.style.width = '100%';
+      return;
+    }
 
-  const isAuto   = event.mode === 'AUTO';
-  const icon     = isAuto ? '⚡' : '✅';
-  const colorCls = isAuto ? 'toast-auto' : 'toast-manual';
-  const title    = isAuto ? 'Auto-Scaling Triggered' : 'Manual Scaling Approved';
-  const body     = `${event.workers_before} → ${event.workers_after} worker cores allocated`;
-  const sub      = event.action || '';
+    if (launcherStatus.status === 'failed') {
+      label.innerText = `Failed (${launcherStatus.profile || ''})`;
+      chip.className = 'scenario-chip failed';
+      if (bar) bar.style.width = '100%';
+      return;
+    }
+  },
 
-  _spawnToast(icon, title, body, sub, colorCls, 6000);
-}
-
-/* ─── NEW ALERT → TOAST ───────────────────────────────────── */
-function checkForNewAlerts(activeAlerts, alertHistory) {
-  const histLen = alertHistory ? alertHistory.length : 0;
-  if (histLen > _lastAlertHistoryLen) {
-    const latest = alertHistory[alertHistory.length - 1];
-    if (latest) showAlertToast(latest);
-  }
-  _lastAlertHistoryLen = histLen;
-}
-
-function showAlertToast(alert) {
-  const isCrit   = alert.severity === 'CRITICAL';
-  const icon     = isCrit ? '🚨' : '⚠️';
-  const title    = isCrit ? 'PROACTIVE CRITICAL ALERT' : 'PROACTIVE WARNING ALERT';
-  const body     = `${alert.metric} forecast: ${
-    typeof alert.forecast_value_30s === 'number' ? alert.forecast_value_30s.toFixed(1) : alert.forecast_value_30s
-  } — SLO breach in ~${alert.lead_time_sec}s`;
-  const sub      = `Current value: ${typeof alert.current_value === 'number' ? alert.current_value.toFixed(1) : alert.current_value}`;
-  const colorCls = isCrit ? 'toast-critical' : 'toast-warning';
-
-  _spawnToast(icon, title, body, sub, colorCls, 8000);
-}
-
-/* ─── TOAST ENGINE ────────────────────────────────────────── */
-function _spawnToast(icon, title, body, sub, colorClass, durationMs) {
-  let container = document.getElementById('toast-container');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'toast-container';
-    document.body.appendChild(container);
-  }
-
-  const toast = document.createElement('div');
-  toast.className = `perm-toast ${colorClass}`;
-  toast.innerHTML = `
-    <div class="toast-icon">${icon}</div>
-    <div class="toast-body">
-      <div class="toast-title">${title}</div>
-      <div class="toast-message">${body}</div>
-      ${sub ? `<div class="toast-sub">${sub}</div>` : ''}
-    </div>
-    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
-    <div class="toast-progress"></div>
-  `;
-
-  container.appendChild(toast);
-
-  // Trigger animation
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => { toast.classList.add('toast-visible'); });
-  });
-
-  // Progress bar animation
-  const bar = toast.querySelector('.toast-progress');
-  if (bar) {
-    bar.style.transition = `width ${durationMs}ms linear`;
-    requestAnimationFrame(() => { requestAnimationFrame(() => { bar.style.width = '0%'; }); });
-  }
-
-  // Auto-dismiss
-  setTimeout(() => {
-    toast.classList.remove('toast-visible');
-    setTimeout(() => toast.remove(), 400);
-  }, durationMs);
-}
-
-/* ─── USER ACTIONS ────────────────────────────────────────── */
-async function setScalingMode(mode) {
-  try {
-    await fetch('/api/scaling/mode', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode })
+  // ─── STALE STATE OVERLAY ───
+  toggleStaleOverlays(isStale) {
+    const overlays = document.querySelectorAll('.chart-empty-overlay');
+    overlays.forEach(el => {
+      el.style.display = isStale ? 'flex' : 'none';
     });
-    pollDashboardState();
-  } catch (e) { console.error('Failed to set scaling mode:', e); }
-}
+  },
 
-async function approvePendingScaling() {
-  try {
-    await fetch('/api/scaling/approve', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_id: activePendingRequestId })
-    });
-    pollDashboardState();
-  } catch (e) { console.error('Failed to approve scaling:', e); }
-}
+  // ─── MAIN STATE POLLING ───
+  async pollState() {
+    if (this.isPollingState) return;
+    this.isPollingState = true;
+    try {
+      const resp = await fetch('/api/dashboard/state');
+      if (!resp.ok) return;
+      const data = await resp.json();
+      this.latestState = data;
 
-async function declinePendingScaling() {
-  try {
-    await fetch('/api/scaling/decline', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ request_id: activePendingRequestId })
-    });
-    pollDashboardState();
-  } catch (e) { console.error('Failed to decline scaling:', e); }
-}
+      // Check stale status
+      const history = data.history || [];
+      const isStale = !!data.stale || history.length === 0;
+      this.toggleStaleOverlays(isStale);
 
-async function resetCapacity() {
-  try {
-    await fetch('/api/scaling/reset', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({})
-    });
-    pollDashboardState();
-  } catch (e) { console.error('Failed to reset capacity:', e); }
-}
+      // Check launcher status for topbar
+      if (data.launcher_status) {
+        this.updateScenarioChip(data.launcher_status);
+      }
+
+      // Delegate to page-specific update handler
+      if (typeof window.PERM_PAGE_UPDATE === 'function') {
+        window.PERM_PAGE_UPDATE(data);
+      }
+    } catch (e) {
+      console.debug('State poll error:', e);
+    } finally {
+      this.isPollingState = false;
+    }
+  },
+
+  init() {
+    // Topbar modal close listener
+    const modal = document.getElementById('serviceModal');
+    if (modal) {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) this.closeServiceModal();
+      });
+    }
+
+    // Health poller (every 2.5s)
+    this.pollHealth();
+    setInterval(() => this.pollHealth(), 2500);
+
+    // State poller (every 1s)
+    this.pollState();
+    setInterval(() => this.pollState(), 1000);
+  }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  window.PERM.init();
+});

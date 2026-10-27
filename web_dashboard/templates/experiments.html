@@ -1,308 +1,566 @@
 {% extends "base.html" %}
 {% block title %}PERM — Scenario Launcher{% endblock %}
+{% block page_title %}Scenario Launcher{% endblock %}
 
 {% block content %}
-<div class="card" style="margin-bottom: 1.5rem;">
-  <div class="chart-header">
-    <span class="chart-title-text">Scenario launcher</span>
-    <span id="launcherStatusBadge" class="badge badge-normal" style="font-size: 0.85rem; padding: 0.35rem 0.8rem;">
-      STATUS: IDLE
+<!-- Page Explanation & Scope Guard Note -->
+<div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--accent-traffic);">
+  <div style="font-size: 0.85rem; color: var(--text-1);">
+    <strong>Launches demo traffic; not an experiment.</strong>
+    <span style="display:block; color: var(--text-muted); font-size: 0.78rem; margin-top: 2px;">
+      Dispatches open-loop Poisson synthetic workloads via headless Locust against the local testbed. Exactly one workload scenario runs at a time.
     </span>
   </div>
-  <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; font-weight: 500;">
-    Launches demo traffic; not an experiment.
-  </p>
-  <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem;">
-    Trigger open-loop synthetic load profiles via headless Locust. Dispatches seeded Poisson-scheduled requests directly against the testbed. Only one run can be active at a time.
-  </p>
+</div>
 
-  <!-- Live Run Monitor Box -->
-  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-top: 1rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+<!-- Run Monitor Panel (D7 & A5) -->
+<div class="card" style="margin-bottom: var(--space-4);">
+  <div class="card-header">
+    <div>
+      <span class="card-title">Active Workload Execution</span>
+      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+        Real-time execution status, elapsed phase timer, and unified process control
+      </span>
+    </div>
+    <div style="display:flex; align-items:center; gap:var(--space-2);">
+      <span id="run-phase-badge" class="status-badge" style="display:none;">CALM PHASE</span>
+      <span id="launcherStatusBadge" class="status-badge status-badge-idle">STATUS: IDLE</span>
+    </div>
+  </div>
+
+  <div class="run-monitor-box">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3);">
       <div>
-        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Active Run</div>
-        <div style="font-size: 1.25rem; font-weight: 700; color: #f8fafc;" id="activeProfileText">None (Idle)</div>
-        <div style="font-size: 0.8rem; color: var(--text-muted);" id="activeDetailsText">Ready for launch</div>
+        <div class="caption">Active Scenario Profile</div>
+        <div style="font-size: 1.35rem; font-weight: 700; color: var(--text-1);" id="activeProfileText">None (Idle)</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" id="activeDetailsText">Ready to dispatch scenario</div>
       </div>
+
       <div style="text-align: right;">
-        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Elapsed / Target</div>
-        <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);" id="activeTimerText">0.0s / 125s</div>
-        <div style="font-size: 0.8rem; color: var(--text-muted);" id="activePidText">PID: —</div>
+        <div class="caption">Progress &bull; Elapsed / Real Target</div>
+        <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-traffic);" class="mono num" id="activeTimerText">0.0s / 0.0s</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" id="activePidText">Locust PID: &mdash; &bull; Controller PID: &mdash;</div>
       </div>
+
       <div>
-        <button id="btnStopRun" class="btn btn-danger" style="padding: 0.6rem 1.4rem; font-weight: 600;" disabled onclick="stopCurrentRun()">
-          ■ Stop Run
+        <button id="btnStopRun" class="btn btn-danger" disabled onclick="stopCurrentRun()">
+          &block; Stop Run
         </button>
       </div>
     </div>
 
-    <!-- Progress bar -->
-    <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; margin-top: 1rem; overflow: hidden;">
-      <div id="runProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue)); transition: width 0.5s ease;"></div>
+    <!-- Large Progress Bar (D7) -->
+    <div class="progress-bar-container" style="margin-top: var(--space-3);">
+      <div id="runProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+    </div>
+
+    <!-- Note / Outcome Message (A1, A5) -->
+    <div id="runNoteBanner" class="note-box" style="display: none; margin-top: var(--space-3);">
+      <span id="runNoteText"></span>
+    </div>
+
+    <!-- Error / Preflight Alert Box (A3, A5) -->
+    <div id="preflightErrorBox" class="note-box error" style="display: none; margin-top: var(--space-3);">
+      <div style="font-weight: 700; margin-bottom: 4px;" id="preflightErrorTitle">Launch Preflight Failed</div>
+      <div id="preflightErrorMessage" style="font-family: var(--font-mono); font-size: 0.8rem; white-space: pre-wrap;"></div>
+    </div>
+
+    <!-- Collapsible Log Tail Box (A2, A5) -->
+    <div id="logTailContainer" style="display: none; margin-top: var(--space-3);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--space-1);">
+        <span class="caption" style="color:var(--text-1);">Locust Output (Last 15 Lines):</span>
+        <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" onclick="toggleLogTail()">Toggle Full Output</button>
+      </div>
+      <pre class="log-tail-box" id="logTailText">No output logs recorded.</pre>
     </div>
   </div>
 
-  <!-- Global Parameter Configuration -->
-  <div style="display: flex; gap: 1.5rem; margin-top: 1.5rem; flex-wrap: wrap; align-items: flex-end;">
-    <div style="min-width: 160px;">
-      <label style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.35rem;">Random Seed</label>
-      <input type="number" id="inputSeed" value="44" style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: #f8fafc; padding: 0.5rem 0.75rem; border-radius: 6px; width: 100%; font-size: 0.9rem;" />
+  <!-- Launch Options Bar (C3: Controller Mode Selector & Run with Controller Checkbox) -->
+  <div style="display: flex; gap: var(--space-4); margin-top: var(--space-3); flex-wrap: wrap; align-items: flex-end; padding-top: var(--space-3); border-top: var(--border-subtle);">
+    <div>
+      <label class="caption" style="display: block; margin-bottom: var(--space-1);">Random Seed</label>
+      <input type="number" id="inputSeed" value="44" class="select-input mono num" style="width: 110px;" />
     </div>
-    <div style="min-width: 160px;">
-      <label style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.35rem;">Duration (seconds)</label>
-      <input type="number" id="inputDuration" value="125" style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: #f8fafc; padding: 0.5rem 0.75rem; border-radius: 6px; width: 100%; font-size: 0.9rem;" />
+
+    <div>
+      <label class="caption" style="display: block; margin-bottom: var(--space-1);">Duration Override (s, Optional)</label>
+      <input type="number" id="inputDuration" placeholder="Auto (Burst)" class="select-input mono num" style="width: 140px;" />
     </div>
-    <div style="flex: 1; text-align: right;">
-      <div id="actionFeedback" style="font-size: 0.85rem; color: var(--accent-cyan); display: none;"></div>
+
+    <div>
+      <label class="caption" style="display: block; margin-bottom: var(--space-1);">Controller Mode</label>
+      <select id="controllerModeSelect" class="select-input" style="width: 160px;">
+        <option value="capacity_aware" selected>Capacity-Aware</option>
+        <option value="reactive">Reactive (70/85%)</option>
+        <option value="predictive">Predictive (ST-AGBDT)</option>
+      </select>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: var(--space-2); padding-bottom: 6px;">
+      <input type="checkbox" id="checkRunWithController" checked style="width: 16px; height: 16px; cursor: pointer;" />
+      <label for="checkRunWithController" style="font-size: 0.82rem; color: var(--text-1); cursor: pointer; user-select: none;">
+        Run with demo controller (auto-scale workers)
+      </label>
+    </div>
+
+    <div style="flex: 1; text-align: right; padding-bottom: 6px;">
+      <span id="actionFeedback" style="font-size: 0.8rem; color: var(--accent-traffic); display: none;"></span>
     </div>
   </div>
 </div>
 
-<!-- Profile Selection Cards Grid -->
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+<!-- D7: Profile Selection Cards Grid (One Card Per Profile with Inline SVG Traffic Shape & Real Duration) -->
+<div style="margin-bottom: var(--space-2);">
+  <h2 style="font-size: 1rem; font-weight: 700; color: var(--text-1); margin-bottom: var(--space-2);">Select Scenario Workload Profile</h2>
+</div>
 
-  <!-- Step -->
-  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-    <div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Step Profile</span>
-        <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan);">Instant Jump</span>
+<div class="scenario-grid">
+  <!-- 1. Step Profile -->
+  <div class="card scenario-card">
+    <div class="scenario-card-top">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="scenario-title">Step Profile</div>
+          <div class="caption">Instant Demand Jump</div>
+        </div>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">65s Real</span>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Abrupt step from baseline (~12 req/s) to high peak (~45 req/s) at t=35s. Tests reactive and predictive controller lag.
-      </p>
+
+      <!-- Inline SVG Sketch: Abrupt square step -->
+      <div class="scenario-svg-box">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+          <path d="M 0 32 L 30 32 L 30 8 L 85 8 L 85 32 L 100 32" fill="none" stroke="#0284c7" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div class="scenario-desc">
+        Abrupt step from baseline (~12 req/s) up to high burst (~45 req/s) at t=20s. Tests instantaneous queuing spike and reactive adaptation delay.
+      </div>
     </div>
-    <div style="margin-top: 1.25rem;">
-      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('step')">
-        ▶ Launch Step
-      </button>
-    </div>
+
+    <button class="btn btn-primary btn-launch" onclick="launchProfile('step')">
+      &blacktriangleright; Launch Step (65s)
+    </button>
   </div>
 
-  <!-- Ramp -->
-  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-    <div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Ramp Profile</span>
-        <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">Smooth Growth</span>
+  <!-- 2. Ramp Profile -->
+  <div class="card scenario-card">
+    <div class="scenario-card-top">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="scenario-title">Ramp Profile</div>
+          <div class="caption">Linear Demand Growth</div>
+        </div>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">135s Real</span>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Smooth linear demand increase over 60 seconds. Tests proactive proportional worker scaling without overshooting.
-      </p>
+
+      <!-- Inline SVG Sketch: Linear upward slope -->
+      <div class="scenario-svg-box">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+          <path d="M 0 32 L 20 32 L 75 8 L 90 8 L 100 32" fill="none" stroke="#8b5cf6" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div class="scenario-desc">
+        Smooth, continuous arrival rate increase across 60 seconds (up to 135s total). Tests proportional capacity ramp without over-provisioning overshoot.
+      </div>
     </div>
-    <div style="margin-top: 1.25rem;">
-      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('ramp')">
-        ▶ Launch Ramp
-      </button>
-    </div>
+
+    <button class="btn btn-primary btn-launch" onclick="launchProfile('ramp')">
+      &blacktriangleright; Launch Ramp (135s)
+    </button>
   </div>
 
-  <!-- Spike -->
-  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-    <div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Spike Profile</span>
-        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--accent-danger);">Impulse</span>
+  <!-- 3. Spike Profile -->
+  <div class="card scenario-card">
+    <div class="scenario-card-top">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="scenario-title">Spike Profile</div>
+          <div class="caption">Sharp Impulse Shock</div>
+        </div>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">65s Real</span>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Narrow, high-amplitude impulse demand lasting 15 seconds before returning to baseline. Evaluates rapid scale-up and scale-down hysteresis.
-      </p>
+
+      <!-- Inline SVG Sketch: Needle spike -->
+      <div class="scenario-svg-box">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+          <path d="M 0 32 L 35 32 L 45 6 L 55 32 L 100 32" fill="none" stroke="#ef4444" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div class="scenario-desc">
+        Severe, transient 10-second traffic spike at t=20s exceeding worker capacity. Directly evaluates queue saturation and tail latency recovery.
+      </div>
     </div>
-    <div style="margin-top: 1.25rem;">
-      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('spike')">
-        ▶ Launch Spike
-      </button>
-    </div>
+
+    <button class="btn btn-primary btn-launch" onclick="launchProfile('spike')">
+      &blacktriangleright; Launch Spike (65s)
+    </button>
   </div>
 
-  <!-- Double Burst -->
-  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-    <div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Double Burst</span>
-        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-warn);">Dual Peaks</span>
+  <!-- 4. Double Burst Profile -->
+  <div class="card scenario-card">
+    <div class="scenario-card-top">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="scenario-title">Double Burst</div>
+          <div class="caption">Repeated Wave Shocks</div>
+        </div>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">130s Real</span>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Two successive burst spikes separated by a brief lull. Tests whether scaling responds cleanly to secondary bursts during cool-down.
-      </p>
+
+      <!-- Inline SVG Sketch: Double bumps -->
+      <div class="scenario-svg-box">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+          <path d="M 0 32 L 15 32 L 25 10 L 40 10 L 48 32 L 60 32 L 70 10 L 85 10 L 92 32 L 100 32" fill="none" stroke="#f59e0b" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div class="scenario-desc">
+        Two distinct consecutive burst phases separated by a calm trough. Tests controller cooldown logic, hysteresis, and rapid second-wave scaleup.
+      </div>
     </div>
-    <div style="margin-top: 1.25rem;">
-      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('double_burst')">
-        ▶ Launch Double Burst
-      </button>
-    </div>
+
+    <button class="btn btn-primary btn-launch" onclick="launchProfile('double_burst')">
+      &blacktriangleright; Launch Double Burst (130s)
+    </button>
   </div>
 
-  <!-- Random Walk -->
-  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-    <div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Random Walk</span>
-        <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: var(--accent-blue);">Stochastic</span>
+  <!-- 5. Random Walk Profile -->
+  <div class="card scenario-card">
+    <div class="scenario-card-top">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="scenario-title">Random Walk</div>
+          <div class="caption">Brownian Traffic Drift</div>
+        </div>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">125s Real</span>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Continuous Brownian drift rate simulating unpredictable edge internet traffic variations. Evaluates continuous tracking error.
-      </p>
+
+      <!-- Inline SVG Sketch: Random undulating curve -->
+      <div class="scenario-svg-box">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+          <path d="M 0 28 Q 15 12, 30 24 T 55 10 T 75 30 T 100 18" fill="none" stroke="#10b981" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div class="scenario-desc">
+        Bounded stochastic random walk across 125 seconds. Models realistic fluctuating traffic patterns without explicit periodic intervals.
+      </div>
     </div>
-    <div style="margin-top: 1.25rem;">
-      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('random_walk')">
-        ▶ Launch Random Walk
-      </button>
-    </div>
+
+    <button class="btn btn-primary btn-launch" onclick="launchProfile('random_walk')">
+      &blacktriangleright; Launch Random Walk (125s)
+    </button>
   </div>
 
-  <!-- Random Mix -->
-  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
-    <div>
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Random Mix</span>
-        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399);">Compound</span>
+  <!-- 6. Random Mix Profile -->
+  <div class="card scenario-card">
+    <div class="scenario-card-top">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="scenario-title">Random Mix</div>
+          <div class="caption">Stochastic Compound Profile</div>
+        </div>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">125s Real</span>
       </div>
-      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
-        Multi-phase compound workload combining steps, ramps, and Poisson bursts. Used in final model calibration and test evaluation.
-      </p>
-    </div>
-    <div style="margin-top: 1.25rem;">
-      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('random_mix')">
-        ▶ Launch Random Mix
-      </button>
-    </div>
-  </div>
 
+      <!-- Inline SVG Sketch: Mixed compound profile -->
+      <div class="scenario-svg-box">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+          <path d="M 0 32 L 18 32 L 24 10 L 38 10 L 44 24 L 58 10 L 74 10 L 82 32 L 100 32" fill="none" stroke="#38bdf8" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div class="scenario-desc">
+        Comprehensive test combining steps, calm intervals, and ramps. Standard testbed scenario used for offline model validation and scoring.
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-launch" onclick="launchProfile('random_mix')">
+      &blacktriangleright; Launch Random Mix (125s)
+    </button>
+  </div>
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_scripts %}
 <script>
-let pollInterval = null;
+let lastLauncherState = null;
 
-function showFeedback(msg, isError) {
-  const el = document.getElementById('actionFeedback');
-  if (!el) return;
-  el.textContent = msg;
-  el.style.color = isError ? 'var(--accent-danger)' : 'var(--accent-cyan)';
-  el.style.display = 'block';
-  setTimeout(() => { el.style.display = 'none'; }, 4000);
+// Launch a scenario profile
+async function launchProfile(profileName) {
+  const seedInput = document.getElementById('inputSeed');
+  const durInput = document.getElementById('inputDuration');
+  const modeSelect = document.getElementById('controllerModeSelect');
+  const checkRunCtrl = document.getElementById('checkRunWithController');
+  const errBox = document.getElementById('preflightErrorBox');
+  const errMsg = document.getElementById('preflightErrorMessage');
+
+  if (errBox) errBox.style.display = 'none';
+
+  const seed = parseInt(seedInput.value, 10) || 44;
+  const customDur = durInput.value ? parseFloat(durInput.value) : null;
+  const mode = modeSelect.value || 'capacity_aware';
+  const runWithCtrl = checkRunCtrl ? checkRunCtrl.checked : true;
+
+  const payload = {
+    profile: profileName,
+    seed: seed,
+    run_with_controller: runWithCtrl,
+    controller_mode: mode
+  };
+  if (customDur) {
+    payload.duration = customDur;
+  }
+
+  // Disable launch buttons while initiating
+  disableLaunchButtons(true);
+  showActionFeedback(`Dispatching ${profileName} profile...`);
+
+  try {
+    const res = await fetch('/api/launcher/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Preflight or startup failure (A3)
+      if (errBox && errMsg) {
+        document.getElementById('preflightErrorTitle').innerText = `Launch Rejected (HTTP ${res.status})`;
+        errMsg.innerText = data.error || data.message || 'Unknown preflight error';
+        errBox.style.display = 'block';
+      }
+      showActionFeedback('Launch failed — see preflight alert below', true);
+      disableLaunchButtons(false);
+      return;
+    }
+
+    showActionFeedback(`Scenario ${profileName} active (${data.duration_sec}s target duration)`);
+    // Immediately poll launcher status
+    pollLauncherStatus();
+  } catch (err) {
+    if (errBox && errMsg) {
+      document.getElementById('preflightErrorTitle').innerText = 'Network / Request Error';
+      errMsg.innerText = String(err);
+      errBox.style.display = 'block';
+    }
+    showActionFeedback('Failed to reach dashboard server', true);
+    disableLaunchButtons(false);
+  }
 }
 
-function updateLauncherUI(data) {
+// Stop current run
+async function stopCurrentRun() {
+  const btn = document.getElementById('btnStopRun');
+  if (btn) btn.disabled = true;
+  showActionFeedback('Terminating Locust workload and controller...');
+
+  try {
+    const res = await fetch('/api/launcher/stop', { method: 'POST' });
+    const data = await res.json();
+    showActionFeedback('Scenario stopped');
+    pollLauncherStatus();
+  } catch (err) {
+    showActionFeedback('Error issuing stop request', true);
+  }
+}
+
+// Poll launcher status
+async function pollLauncherStatus() {
+  try {
+    const res = await fetch('/api/launcher/status');
+    if (!res.ok) return;
+    const data = await res.json();
+    updateLauncherUI(data);
+  } catch (err) {
+    console.debug('Launcher poll error:', err);
+  }
+}
+
+// Update UI based on launcher status (A1, A2, A5)
+function updateLauncherUI(state) {
+  lastLauncherState = state;
+  const status = (state.status || 'idle').toLowerCase();
+
   const badge = document.getElementById('launcherStatusBadge');
-  const profText = document.getElementById('activeProfileText');
-  const detText = document.getElementById('activeDetailsText');
+  const phaseBadge = document.getElementById('run-phase-badge');
+  const profileText = document.getElementById('activeProfileText');
+  const detailsText = document.getElementById('activeDetailsText');
   const timerText = document.getElementById('activeTimerText');
   const pidText = document.getElementById('activePidText');
-  const stopBtn = document.getElementById('btnStopRun');
-  const pBar = document.getElementById('runProgressBar');
-  const launchBtns = document.querySelectorAll('.launcher-btn');
+  const progressBar = document.getElementById('runProgressBar');
+  const btnStop = document.getElementById('btnStopRun');
+  const noteBanner = document.getElementById('runNoteBanner');
+  const noteText = document.getElementById('runNoteText');
+  const logTailBox = document.getElementById('logTailContainer');
+  const logTailText = document.getElementById('logTailText');
 
-  const status = (data.status || 'idle').toLowerCase();
-
-  // Update badge
-  if (status === 'running') {
-    badge.className = 'badge badge-warn';
-    badge.textContent = 'STATUS: RUNNING';
-    stopBtn.disabled = false;
-    launchBtns.forEach(b => b.disabled = true);
-  } else if (status === 'finished') {
-    badge.className = 'badge badge-normal';
-    badge.textContent = 'STATUS: FINISHED';
-    stopBtn.disabled = true;
-    launchBtns.forEach(b => b.disabled = false);
-  } else if (status === 'stopped') {
-    badge.className = 'badge badge-critical';
-    badge.textContent = 'STATUS: STOPPED';
-    stopBtn.disabled = true;
-    launchBtns.forEach(b => b.disabled = false);
-  } else {
-    badge.className = 'badge badge-normal';
-    badge.textContent = 'STATUS: IDLE';
-    stopBtn.disabled = true;
-    launchBtns.forEach(b => b.disabled = false);
-  }
-
-  // Active details
-  if (data.profile) {
-    profText.textContent = data.profile.toUpperCase() + ' (Seed ' + data.seed + ')';
-  } else {
-    profText.textContent = 'None (Idle)';
-  }
-
-  const duration = data.duration_sec || 125;
-  const elapsed = data.elapsed_sec !== null && data.elapsed_sec !== undefined ? data.elapsed_sec : 0;
-
-  if (status === 'running') {
-    detText.textContent = 'Headless Locust actively generating Poisson requests...';
-    timerText.textContent = elapsed.toFixed(1) + 's / ' + duration + 's';
-    pidText.textContent = 'PID: ' + (data.pid || '—');
-    const pct = Math.min(100, Math.max(0, (elapsed / duration) * 100));
-    pBar.style.width = pct + '%';
-  } else if (status === 'finished') {
-    detText.textContent = 'Completed profile duration (' + duration + 's). Returncode: ' + (data.returncode !== null ? data.returncode : 0);
-    timerText.textContent = (elapsed || duration).toFixed(1) + 's / ' + duration + 's';
-    pidText.textContent = 'Completed';
-    pBar.style.width = '100%';
-  } else if (status === 'stopped') {
-    detText.textContent = 'Run manually stopped by operator at ' + elapsed.toFixed(1) + 's.';
-    timerText.textContent = elapsed.toFixed(1) + 's / ' + duration + 's';
-    pidText.textContent = 'Stopped';
-  } else {
-    detText.textContent = 'Ready for launch';
-    timerText.textContent = '0.0s / ' + duration + 's';
-    pidText.textContent = 'PID: —';
-    pBar.style.width = '0%';
-  }
-}
-
-function pollLauncherStatus() {
-  fetch('/api/launcher/status')
-    .then(r => r.json())
-    .then(data => {
-      updateLauncherUI(data);
-    })
-    .catch(err => {
-      console.warn('Failed to poll launcher status:', err);
-    });
-}
-
-function launchProfile(profile) {
-  const seed = parseInt(document.getElementById('inputSeed').value, 10) || 44;
-  const duration = parseInt(document.getElementById('inputDuration').value, 10) || 125;
-
-  fetch('/api/launcher/start', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profile: profile, seed: seed, duration: duration })
-  })
-  .then(async r => {
-    const data = await r.json();
-    if (!r.ok) {
-      showFeedback(data.error || 'Failed to start scenario', true);
-      pollLauncherStatus();
-    } else {
-      showFeedback('Launched ' + profile + ' (seed ' + seed + ')', false);
-      pollLauncherStatus();
+  // Handle note
+  if (state.note) {
+    if (noteBanner && noteText) {
+      noteText.innerText = state.note;
+      noteBanner.className = 'note-box info';
+      noteBanner.style.display = 'block';
     }
-  })
-  .catch(err => {
-    showFeedback('Network error: ' + err, true);
-  });
+  } else if (status === 'idle') {
+    if (noteBanner) noteBanner.style.display = 'none';
+  }
+
+  // Handle log tail
+  if (state.log_tail && (status === 'failed' || status === 'finished')) {
+    if (logTailBox && logTailText) {
+      logTailText.innerText = state.log_tail;
+      logTailBox.style.display = 'block';
+    }
+  } else if (status === 'idle') {
+    if (logTailBox) logTailBox.style.display = 'none';
+  }
+
+  if (status === 'running') {
+    disableLaunchButtons(true);
+    if (btnStop) btnStop.disabled = false;
+
+    if (badge) {
+      badge.className = 'status-badge status-badge-warn';
+      badge.innerText = 'STATUS: RUNNING';
+    }
+
+    // Phase label: CALM vs BURST (D7)
+    if (phaseBadge) {
+      phaseBadge.style.display = 'inline-flex';
+      if (state.is_burst) {
+        phaseBadge.className = 'status-badge status-badge-crit';
+        phaseBadge.innerText = 'BURST PHASE';
+      } else {
+        phaseBadge.className = 'status-badge status-badge-ok';
+        phaseBadge.innerText = 'CALM PHASE';
+      }
+    }
+
+    const prof = (state.profile || 'Workload').toUpperCase();
+    if (profileText) profileText.innerText = `${prof} (Active)`;
+    if (detailsText) detailsText.innerText = `Traffic load generating against testbed`;
+
+    const elapsed = (state.elapsed_sec || 0).toFixed(1);
+    const target = (state.duration_sec || 65).toFixed(1);
+    if (timerText) timerText.innerText = `${elapsed}s / ${target}s`;
+
+    const locPid = state.locust_pid || '—';
+    const ctrlPid = state.controller_pid || '—';
+    if (pidText) pidText.innerText = `Locust PID: ${locPid} • Controller PID: ${ctrlPid}`;
+
+    const pct = Math.min(100, Math.max(0, ((state.elapsed_sec || 0) / (state.duration_sec || 65)) * 100));
+    if (progressBar) progressBar.style.width = `${pct}%`;
+
+    return;
+  }
+
+  if (status === 'finished') {
+    disableLaunchButtons(false);
+    if (btnStop) btnStop.disabled = true;
+
+    if (badge) {
+      badge.className = 'status-badge status-badge-ok';
+      badge.innerText = 'STATUS: FINISHED';
+    }
+    if (phaseBadge) phaseBadge.style.display = 'none';
+
+    const prof = (state.profile || 'Workload').toUpperCase();
+    if (profileText) profileText.innerText = `${prof} (Finished)`;
+    if (detailsText) detailsText.innerText = state.note || 'Workload run completed normally';
+
+    const elapsed = (state.elapsed_sec || 0).toFixed(1);
+    const target = (state.duration_sec || 0).toFixed(1);
+    if (timerText) timerText.innerText = `${elapsed}s / ${target}s`;
+    if (progressBar) progressBar.style.width = '100%';
+    return;
+  }
+
+  if (status === 'failed') {
+    // A1, A5: Red badge, message, log tail in collapsible box
+    disableLaunchButtons(false);
+    if (btnStop) btnStop.disabled = true;
+
+    if (badge) {
+      badge.className = 'status-badge status-badge-crit';
+      badge.innerText = 'STATUS: FAILED';
+    }
+    if (phaseBadge) phaseBadge.style.display = 'none';
+
+    const prof = (state.profile || 'Workload').toUpperCase();
+    if (profileText) profileText.innerText = `${prof} (Failed)`;
+    if (detailsText) detailsText.innerText = state.message || 'Execution error or early exit';
+
+    if (noteBanner && noteText) {
+      noteText.innerText = state.message || 'Workload process terminated unexpectedly';
+      noteBanner.className = 'note-box error';
+      noteBanner.style.display = 'block';
+    }
+
+    if (progressBar) progressBar.style.width = '0%';
+    return;
+  }
+
+  // IDLE (or any other status)
+  // A5: Unknown status must never fall through to IDLE without notification
+  if (status !== 'idle') {
+    if (badge) {
+      badge.className = 'status-badge status-badge-warn';
+      badge.innerText = `STATUS: ${status.toUpperCase()}`;
+    }
+    if (detailsText) detailsText.innerText = `Status: ${status}`;
+    return;
+  }
+
+  // Standard IDLE
+  disableLaunchButtons(false);
+  if (btnStop) btnStop.disabled = true;
+  if (badge) {
+    badge.className = 'status-badge status-badge-idle';
+    badge.innerText = 'STATUS: IDLE';
+  }
+  if (phaseBadge) phaseBadge.style.display = 'none';
+  if (profileText) profileText.innerText = 'None (Idle)';
+  if (detailsText) detailsText.innerText = 'Ready to dispatch scenario';
+  if (timerText) timerText.innerText = '0.0s / 0.0s';
+  if (pidText) pidText.innerText = 'Locust PID: — • Controller PID: —';
+  if (progressBar) progressBar.style.width = '0%';
 }
 
-function stopCurrentRun() {
-  fetch('/api/launcher/stop', { method: 'POST' })
-    .then(r => r.json())
-    .then(data => {
-      showFeedback(data.message || 'Run stopped', false);
-      pollLauncherStatus();
-    })
-    .catch(err => {
-      showFeedback('Failed to stop run: ' + err, true);
-    });
+function disableLaunchButtons(disabled) {
+  const btns = document.querySelectorAll('.btn-launch');
+  btns.forEach(b => { b.disabled = disabled; });
 }
+
+function showActionFeedback(msg, isError = false) {
+  const el = document.getElementById('actionFeedback');
+  if (!el) return;
+  el.innerText = msg;
+  el.style.color = isError ? 'var(--color-crit)' : 'var(--accent-traffic)';
+  el.style.display = 'inline';
+}
+
+function toggleLogTail() {
+  const el = document.getElementById('logTailText');
+  if (el) {
+    el.style.maxHeight = el.style.maxHeight === 'none' ? '180px' : 'none';
+  }
+}
+
+// Hook into PERM main poller
+window.PERM_PAGE_UPDATE = function(data) {
+  if (data.launcher_status) {
+    updateLauncherUI(data.launcher_status);
+  }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
   pollLauncherStatus();
-  pollInterval = setInterval(pollLauncherStatus, 1000);
 });
 </script>
 {% endblock %}

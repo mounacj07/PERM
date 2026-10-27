@@ -1,211 +1,538 @@
 {% extends "base.html" %}
 {% block title %}PERM — Overview{% endblock %}
+{% block page_title %}System Overview{% endblock %}
 
 {% block content %}
-<!-- KPI Cards Row -->
-<div class="grid-kpi">
-  <div class="card card-kpi kpi-workers">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Active Workers</span>
-      <span class="card-tag mono">CAPACITY</span>
+<!-- KPI Cards Row (D5: Max 5 per row, equal height, big value, small label, 60s min/max sub-line, status dot) -->
+<div class="kpi-grid">
+  <!-- 1. Active Workers -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Active Workers</span>
+      <span class="kpi-status-dot status-workers" id="dot-workers"></span>
     </div>
-    <div class="card-value num" id="val-workers" style="color: var(--color-purple);">2 / 8</div>
-    <div class="card-subtext" id="sub-workers">Base Capacity: 2 Workers</div>
+    <div class="kpi-value text-workers" id="kpi-val-workers">2 / 8</div>
+    <div class="kpi-subline">
+      <span id="kpi-sub-workers">60s min: 2 &bull; max: 2</span>
+    </div>
   </div>
 
-  <div class="card card-kpi kpi-arrivals">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Arrival Rate</span>
-      <span class="card-tag mono">DEMAND</span>
+  <!-- 2. Arrival Rate -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Arrival Rate</span>
+      <span class="kpi-status-dot status-traffic" id="dot-arrivals"></span>
     </div>
-    <div class="card-value num" id="val-arrivals" style="color: var(--color-primary);">-- req/s</div>
-    <div class="card-subtext" id="sub-arrivals">Window: 1-second sample</div>
+    <div class="kpi-value text-traffic" id="kpi-val-arrivals">0.0 <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">req/s</span></div>
+    <div class="kpi-subline">
+      <span id="kpi-sub-arrivals">60s min: 0.0 &bull; max: 0.0</span>
+    </div>
   </div>
 
-  <div class="card card-kpi kpi-latency">
-    <div class="card-header-sm">
-      <span class="card-title-sm">P95 Response Latency</span>
-      <span class="card-tag mono">SLO 300ms</span>
+  <!-- 3. P95 Latency -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">P95 Latency</span>
+      <span class="kpi-status-dot status-ok" id="dot-p95"></span>
     </div>
-    <div class="card-value num" id="val-p95" style="color: var(--color-success);">-- ms</div>
-    <div class="card-subtext" id="sub-p95">Avg: -- ms</div>
+    <div class="kpi-value text-ok" id="kpi-val-p95">-- <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">ms</span></div>
+    <div class="kpi-subline">
+      <span id="kpi-sub-p95">60s min: -- &bull; max: --</span>
+    </div>
   </div>
 
-  <div class="card card-kpi kpi-queue">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Queue Depth</span>
-      <span class="card-tag mono">CAP 20</span>
+  <!-- 4. Queue Depth -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Queue Depth</span>
+      <span class="kpi-status-dot status-ok" id="dot-queue"></span>
     </div>
-    <div class="card-value num" id="val-queue" style="color: var(--color-warning);">0</div>
-    <div class="card-subtext" id="sub-queue">In-flight: 0 requests</div>
+    <div class="kpi-value" id="kpi-val-queue">0 <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">/ 20</span></div>
+    <div class="kpi-subline">
+      <span id="kpi-sub-queue">60s min: 0 &bull; max: 0</span>
+    </div>
   </div>
 
-  <div class="card card-kpi kpi-failures">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Failed Requests</span>
-      <span class="card-tag mono">ERRORS</span>
+  <!-- 5. Failed Requests -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Failed Requests</span>
+      <span class="kpi-status-dot status-ok" id="dot-fails"></span>
     </div>
-    <div class="card-value num" id="val-fails" style="color: var(--color-danger);">0</div>
-    <div class="card-subtext" id="sub-fails">HTTP 503 / Timeouts: 0</div>
+    <div class="kpi-value" id="kpi-val-fails">0</div>
+    <div class="kpi-subline">
+      <span id="kpi-sub-fails">Cumulative drops / timeouts</span>
+    </div>
   </div>
 </div>
 
-<!-- Status and Sparklines Row -->
-<div class="grid-charts">
-  <div class="card">
-    <div class="chart-header">
-      <span class="chart-title-text">Worker CPU Utilization Sparkline (Recent 60s)</span>
-      <span id="badge-cpu" class="status-badge status-badge-ok">NORMAL</span>
+<!-- D3: Overview Hero Chart "Traffic vs capacity" -->
+<div class="card" style="margin-bottom: var(--space-3);">
+  <div class="card-header">
+    <div>
+      <span class="card-title">Traffic Demand vs. Provisioned Capacity</span>
+      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+        Bars: Arrival Rate (req/s) &bull; Solid Line: Effective Capacity (Workers &times; 7.89 req/s) &bull; Stepped Line: Active Workers (Right Axis)
+      </span>
     </div>
-    <div class="sparkline-wrapper">
-      <canvas id="chart-spark-cpu"></canvas>
+    <div>
+      <span id="hero-status-pill" class="status-badge status-badge-ok">CAPACITY SUFFICIENT</span>
+    </div>
+  </div>
+  <div class="chart-wrapper">
+    <div class="chart-empty-overlay">
+      <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
+    </div>
+    <canvas id="chart-hero-traffic"></canvas>
+  </div>
+</div>
+
+<!-- Dual Secondary Charts (Latency with 300ms SLO Breach Zone & Pool Utilization with 70%/85% Bands) -->
+<div class="grid-2col" style="margin-bottom: var(--space-3);">
+  <!-- P95 Latency -->
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <span class="card-title">P95 Response Latency (SLO 300ms)</span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          Rolling 90s window with shaded 300ms breach zone
+        </span>
+      </div>
+      <span id="latency-slo-badge" class="status-badge status-badge-ok">WITHIN SLO</span>
+    </div>
+    <div class="chart-wrapper">
+      <div class="chart-empty-overlay">
+        <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
+      </div>
+      <canvas id="chart-overview-lat"></canvas>
     </div>
   </div>
 
+  <!-- Pool Utilization -->
   <div class="card">
-    <div class="chart-header">
-      <span class="chart-title-text">Response Latency Sparkline (Recent 60s)</span>
-      <span id="badge-lat" class="status-badge status-badge-ok">NORMAL</span>
+    <div class="card-header">
+      <div>
+        <span class="card-title">Pool Utilization (% of Active Workers)</span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          Shaded warning band (70%–85%) &amp; critical band (&ge;85%)
+        </span>
+      </div>
+      <span id="util-badge" class="status-badge status-badge-ok">NORMAL</span>
     </div>
-    <div class="sparkline-wrapper">
-      <canvas id="chart-spark-lat"></canvas>
+    <div class="chart-wrapper">
+      <div class="chart-empty-overlay">
+        <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
+      </div>
+      <canvas id="chart-overview-util"></canvas>
     </div>
+  </div>
+</div>
+
+<!-- D6: Event Feed Panel (Last 10 controller events with colored badges and relative times) -->
+<div class="card">
+  <div class="card-header">
+    <div>
+      <span class="card-title">Controller Scaling &amp; Alert Event Feed</span>
+      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+        Audit trail of automatic worker adjustments and utilization threshold crossings
+      </span>
+    </div>
+    <span class="mono" style="font-size:0.75rem; color:var(--text-muted);" id="events-count-label">0 events</span>
+  </div>
+  <div style="overflow-x: auto;">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 140px;">Time</th>
+          <th style="width: 130px;">Event Type</th>
+          <th style="width: 140px;">Signal / Metric</th>
+          <th style="width: 160px;">Action / Workers</th>
+          <th>Trigger Reason &amp; Rule</th>
+        </tr>
+      </thead>
+      <tbody id="events-table-body">
+        <tr>
+          <td colspan="5" style="text-align: center; color: var(--text-muted); padding: var(--space-4);">
+            No scaling or alert events recorded in current run.
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-let sparkCpuChart = null;
-let sparkLatChart = null;
+let heroChart = null;
+let latChart = null;
+let utilChart = null;
 
-function initSparklines() {
-  const commonSparkOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    scales: {
-      x: { display: false },
-      y: { display: false }
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: { enabled: true }
-    },
-    elements: {
-      point: { radius: 0 }
-    }
-  };
-
-  const ctxCpu = document.getElementById('chart-spark-cpu').getContext('2d');
-  sparkCpuChart = new Chart(ctxCpu, {
-    type: 'line',
+// Initialize Overview Charts
+function initOverviewCharts() {
+  // 1. Hero Chart: Traffic vs Capacity
+  const ctxHero = document.getElementById('chart-hero-traffic').getContext('2d');
+  heroChart = new Chart(ctxHero, {
+    type: 'bar',
     data: {
       labels: [],
-      datasets: [{
-        data: [],
-        borderColor: '#38bdf8',
-        borderWidth: 2,
-        fill: true,
-        backgroundColor: 'rgba(56, 189, 248, 0.1)',
-        tension: 0.3
-      }]
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Arrivals (req/s)',
+          data: [],
+          backgroundColor: 'rgba(2, 132, 199, 0.65)',
+          borderColor: '#0284c7',
+          borderWidth: 1,
+          barPercentage: 0.8,
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: 'Capacity (Workers × 7.89 req/s)',
+          data: [],
+          borderColor: '#a78bfa',
+          borderWidth: 2,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          fill: false,
+          tension: 0,
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: 'Active Workers',
+          data: [],
+          borderColor: '#8b5cf6',
+          borderWidth: 2.5,
+          stepped: true,
+          pointRadius: 0,
+          fill: false,
+          yAxisID: 'y1'
+        }
+      ]
     },
-    options: { ...commonSparkOptions, scales: { y: { min: 0, max: 100 } } }
+    options: PERM.createStandardChartOptions({
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false },
+          ticks: { color: '#71717a', font: { size: 10 }, maxTicksLimit: 8, maxRotation: 0 }
+        },
+        y: {
+          position: 'left',
+          title: { display: true, text: 'Req / sec', color: '#71717a', font: { size: 10 } },
+          grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
+          ticks: { color: '#71717a', font: { size: 10 } },
+          min: 0
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'Workers', color: '#71717a', font: { size: 10 } },
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#8b5cf6', font: { size: 10 }, stepSize: 1 },
+          min: 0,
+          max: 8
+        }
+      }
+    })
   });
 
-  const ctxLat = document.getElementById('chart-spark-lat').getContext('2d');
-  sparkLatChart = new Chart(ctxLat, {
+  // 2. Latency Chart with 300ms SLO Breach Zone
+  const ctxLat = document.getElementById('chart-overview-lat').getContext('2d');
+  latChart = new Chart(ctxLat, {
     type: 'line',
     data: {
       labels: [],
-      datasets: [{
-        data: [],
-        borderColor: '#10b981',
-        borderWidth: 2,
-        fill: true,
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        tension: 0.3
-      }]
+      datasets: [
+        {
+          label: 'P95 Latency (ms)',
+          data: [],
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+          fill: true
+        }
+      ]
     },
-    options: commonSparkOptions
+    options: PERM.createStandardChartOptions({
+      scales: {
+        y: {
+          min: 0,
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#71717a', font: { size: 10 } }
+        }
+      },
+      plugins: {
+        permAnnotations: {
+          bands: [
+            { yMin: 300, yMax: 5000, color: 'rgba(239, 68, 68, 0.12)' }
+          ],
+          lines: [
+            { y: 300, color: '#ef4444', width: 1.5, dash: [4, 4], label: 'SLO 300ms' }
+          ]
+        }
+      }
+    })
+  });
+
+  // 3. Pool Utilization Chart with 70% and 85% bands
+  const ctxUtil = document.getElementById('chart-overview-util').getContext('2d');
+  utilChart = new Chart(ctxUtil, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Pool Utilization (%)',
+          data: [],
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+          fill: true
+        }
+      ]
+    },
+    options: PERM.createStandardChartOptions({
+      scales: {
+        y: {
+          min: 0,
+          max: 100,
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#71717a', font: { size: 10 } }
+        }
+      },
+      plugins: {
+        permAnnotations: {
+          bands: [
+            { yMin: 70, yMax: 85, color: 'rgba(245, 158, 11, 0.10)' },
+            { yMin: 85, yMax: 100, color: 'rgba(239, 68, 68, 0.12)' }
+          ],
+          lines: [
+            { y: 70, color: '#f59e0b', width: 1, dash: [4, 4], label: 'Warn 70%' },
+            { y: 85, color: '#ef4444', width: 1, dash: [4, 4], label: 'Crit 85%' }
+          ]
+        }
+      }
+    })
   });
 }
 
-function onStateUpdate(data) {
+// Global page update hook invoked on every poll by PERM
+window.PERM_PAGE_UPDATE = function(data) {
   const telem = data.telemetry_latest || {};
-  const history = data.telemetry_history || [];
-  const ctrlState = data.controller_state || {};
+  const history = data.history || [];
+  const ctrlEvents = data.controller_events || [];
 
-  // 1. KPI cards
-  const workers = ctrlState.current_workers || telem.active_workers || 2;
-  document.getElementById('val-workers').innerText = `${workers} / 8`;
+  // 1. Controller Mode Label in Sidebar
+  const modeLabel = data.mode_label || (data.controller_state && data.controller_state.mode ? `Demo controller: ${data.controller_state.mode}` : 'Controller not running');
+  const elMode = document.getElementById('global-mode-label');
+  if (elMode) elMode.innerText = modeLabel;
 
-  const arrivals = telem.arrivals_count !== undefined ? telem.arrivals_count.toFixed(1) : '0.0';
-  document.getElementById('val-arrivals').innerText = `${arrivals} req/s`;
+  // 2. Active Workers KPI
+  const workers = telem.active_workers !== undefined ? telem.active_workers : (data.controller_state ? data.controller_state.current_workers : 2);
+  const elWorkers = document.getElementById('kpi-val-workers');
+  if (elWorkers) elWorkers.innerText = `${workers} / 8`;
 
-  const p95 = telem.p95_latency_ms !== undefined ? telem.p95_latency_ms.toFixed(1) : '--';
-  const avg = telem.avg_latency_ms !== undefined ? telem.avg_latency_ms.toFixed(1) : '--';
-  document.getElementById('val-p95').innerText = `${p95} ms`;
-  document.getElementById('sub-p95').innerText = `Avg: ${avg} ms`;
+  // 3. Arrivals KPI
+  const arrivals = telem.arrival_rate_req_per_s !== undefined ? telem.arrival_rate_req_per_s : 0.0;
+  const elArr = document.getElementById('kpi-val-arrivals');
+  if (elArr) elArr.innerHTML = `${arrivals.toFixed(1)} <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">req/s</span>`;
 
-  const queue = telem.queue_depth !== undefined ? telem.queue_depth : 0;
-  const inFlight = telem.in_flight !== undefined ? telem.in_flight : queue;
-  document.getElementById('val-queue').innerText = queue;
-  document.getElementById('sub-queue').innerText = `In-flight: ${inFlight} requests`;
-
-  const fails = telem.error_count !== undefined ? telem.error_count : 0;
-  document.getElementById('val-fails').innerText = fails;
-
-  // 2. Sparklines
-  if (history.length > 0) {
-    const labels = history.map(r => r.timestamp);
-    const cpuData = history.map(r => {
-      const wCpu = r.worker_cpu_percent !== undefined ? r.worker_cpu_percent : (r.cpu_percent || 0);
-      const w = r.active_workers || 2;
-      return Math.min(100.0, Math.max(0.0, (wCpu * 16.0) / Math.max(1, w)));
-    });
-    const latData = history.map(r => r.p95_latency_ms || r.avg_latency_ms || 0);
-
-    sparkCpuChart.data.labels = labels;
-    sparkCpuChart.data.datasets[0].data = cpuData;
-    sparkCpuChart.update('none');
-
-    sparkLatChart.data.labels = labels;
-    sparkLatChart.data.datasets[0].data = latData;
-    sparkLatChart.update('none');
-
-    // Status badges
-    const latestCpu = cpuData[cpuData.length - 1] || 0;
-    const badgeCpu = document.getElementById('badge-cpu');
-    if (latestCpu >= 85) {
-      badgeCpu.className = 'status-badge status-badge-crit';
-      badgeCpu.innerText = 'CRITICAL (≥85%)';
-    } else if (latestCpu >= 70) {
-      badgeCpu.className = 'status-badge status-badge-warn';
-      badgeCpu.innerText = 'WARNING (≥70%)';
+  // 4. P95 Latency KPI
+  const p95 = telem.p95_latency_ms !== undefined ? telem.p95_latency_ms : (telem.avg_latency_ms !== undefined ? telem.avg_latency_ms : null);
+  const elP95 = document.getElementById('kpi-val-p95');
+  const dotP95 = document.getElementById('dot-p95');
+  const latBadge = document.getElementById('latency-slo-badge');
+  if (elP95 && p95 !== null) {
+    elP95.innerHTML = `${p95.toFixed(1)} <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">ms</span>`;
+    if (p95 >= 300) {
+      elP95.className = 'kpi-value text-crit';
+      if (dotP95) dotP95.className = 'kpi-status-dot status-crit';
+      if (latBadge) { latBadge.className = 'status-badge status-badge-crit'; latBadge.innerText = 'SLO BREACH (≥300ms)'; }
+    } else if (p95 >= 150) {
+      elP95.className = 'kpi-value text-warn';
+      if (dotP95) dotP95.className = 'kpi-status-dot status-warn';
+      if (latBadge) { latBadge.className = 'status-badge status-badge-warn'; latBadge.innerText = 'SLO ELEVATED (≥150ms)'; }
     } else {
-      badgeCpu.className = 'status-badge status-badge-ok';
-      badgeCpu.innerText = 'NORMAL';
-    }
-
-    const latestLat = latData[latData.length - 1] || 0;
-    const badgeLat = document.getElementById('badge-lat');
-    if (latestLat >= 300) {
-      badgeLat.className = 'status-badge status-badge-crit';
-      badgeLat.innerText = 'SLO BREACH';
-    } else if (latestLat >= 200) {
-      badgeLat.className = 'status-badge status-badge-warn';
-      badgeLat.innerText = 'WARNING';
-    } else {
-      badgeLat.className = 'status-badge status-badge-ok';
-      badgeLat.innerText = 'SLO COMPLIANT';
+      elP95.className = 'kpi-value text-ok';
+      if (dotP95) dotP95.className = 'kpi-status-dot status-ok';
+      if (latBadge) { latBadge.className = 'status-badge status-badge-ok'; latBadge.innerText = 'WITHIN SLO'; }
     }
   }
+
+  // 5. Queue Depth KPI
+  const qdepth = telem.queue_depth !== undefined ? telem.queue_depth : 0;
+  const elQueue = document.getElementById('kpi-val-queue');
+  const dotQueue = document.getElementById('dot-queue');
+  if (elQueue) {
+    elQueue.innerHTML = `${qdepth} <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">/ 20</span>`;
+    if (qdepth >= 10) {
+      elQueue.className = 'kpi-value text-crit';
+      if (dotQueue) dotQueue.className = 'kpi-status-dot status-crit';
+    } else if (qdepth >= 4) {
+      elQueue.className = 'kpi-value text-warn';
+      if (dotQueue) dotQueue.className = 'kpi-status-dot status-warn';
+    } else {
+      elQueue.className = 'kpi-value';
+      if (dotQueue) dotQueue.className = 'kpi-status-dot status-ok';
+    }
+  }
+
+  // 6. Failed Requests KPI
+  const fails = telem.dropped_requests_total !== undefined ? telem.dropped_requests_total : (telem.failed_requests !== undefined ? telem.failed_requests : 0);
+  const elFails = document.getElementById('kpi-val-fails');
+  const dotFails = document.getElementById('dot-fails');
+  if (elFails) {
+    elFails.innerText = fails;
+    elFails.className = fails > 0 ? 'kpi-value text-crit' : 'kpi-value';
+    if (dotFails) dotFails.className = fails > 0 ? 'kpi-status-dot status-crit' : 'kpi-status-dot status-ok';
+  }
+
+  // 7. 60-Second Rolling Window Sublines (min/max)
+  const last60 = history.slice(-60);
+  const arrList = last60.map(r => r.arrival_rate_req_per_s || 0);
+  const arrStats = PERM.computeStats(arrList);
+  const subArr = document.getElementById('kpi-sub-arrivals');
+  if (subArr) subArr.innerText = `60s min: ${arrStats.min.toFixed(1)} • max: ${arrStats.max.toFixed(1)}`;
+
+  const p95List = last60.map(r => r.p95_latency_ms !== undefined ? r.p95_latency_ms : (r.avg_latency_ms || 0));
+  const p95Stats = PERM.computeStats(p95List);
+  const subP95 = document.getElementById('kpi-sub-p95');
+  if (subP95) subP95.innerText = `60s min: ${p95Stats.min.toFixed(1)} • max: ${p95Stats.max.toFixed(1)}`;
+
+  const workList = last60.map(r => r.active_workers || 2);
+  const workStats = PERM.computeStats(workList);
+  const subWork = document.getElementById('kpi-sub-workers');
+  if (subWork) subWork.innerText = `60s min: ${workStats.min} • max: ${workStats.max}`;
+
+  const qList = last60.map(r => r.queue_depth || 0);
+  const qStats = PERM.computeStats(qList);
+  const subQ = document.getElementById('kpi-sub-queue');
+  if (subQ) subQ.innerText = `60s min: ${qStats.min} • max: ${qStats.max}`;
+
+  // 8. Update Charts (Rolling 90s Window)
+  const windowSlice = history.slice(-90);
+  const labels = windowSlice.map(r => PERM.formatTime(r.timestamp));
+  const arrivalsData = windowSlice.map(r => r.arrival_rate_req_per_s || 0);
+  const workersData = windowSlice.map(r => r.active_workers || 2);
+  const capacityData = workersData.map(w => +(w * 7.89).toFixed(2));
+  const latencyData = windowSlice.map(r => r.p95_latency_ms !== undefined ? r.p95_latency_ms : (r.avg_latency_ms || 0));
+  // Use worker_cpu_per_active_pct from record (No hardcoded 16)
+  const utilData = windowSlice.map(r => {
+    if (r.worker_cpu_per_active_pct !== undefined) return +r.worker_cpu_per_active_pct.toFixed(1);
+    if (r.worker_cpu_percent !== undefined) {
+      const cpus = data.logical_cpus || 16;
+      const w = Math.max(1, r.active_workers || 2);
+      return +Math.min(100, (r.worker_cpu_percent * cpus) / w).toFixed(1);
+    }
+    return 0;
+  });
+
+  // Hero status pill check
+  const latestCap = capacityData.length > 0 ? capacityData[capacityData.length - 1] : 15.78;
+  const heroPill = document.getElementById('hero-status-pill');
+  if (heroPill) {
+    if (arrivals > latestCap) {
+      heroPill.className = 'status-badge status-badge-crit';
+      heroPill.innerText = 'DEMAND EXCEEDS CAPACITY';
+    } else if (arrivals > latestCap * 0.85) {
+      heroPill.className = 'status-badge status-badge-warn';
+      heroPill.innerText = 'NEAR CAPACITY (≥85%)';
+    } else {
+      heroPill.className = 'status-badge status-badge-ok';
+      heroPill.innerText = 'CAPACITY SUFFICIENT';
+    }
+  }
+
+  // Utilization badge
+  const latestUtil = utilData.length > 0 ? utilData[utilData.length - 1] : 0;
+  const utilBadge = document.getElementById('util-badge');
+  if (utilBadge) {
+    if (latestUtil >= 85) {
+      utilBadge.className = 'status-badge status-badge-crit';
+      utilBadge.innerText = 'CRITICAL (≥85%)';
+    } else if (latestUtil >= 70) {
+      utilBadge.className = 'status-badge status-badge-warn';
+      utilBadge.innerText = 'WARNING (≥70%)';
+    } else {
+      utilBadge.className = 'status-badge status-badge-ok';
+      utilBadge.innerText = 'NORMAL';
+    }
+  }
+
+  if (heroChart) {
+    heroChart.data.labels = labels;
+    heroChart.data.datasets[0].data = arrivalsData;
+    heroChart.data.datasets[1].data = capacityData;
+    heroChart.data.datasets[2].data = workersData;
+    heroChart.update('none');
+  }
+
+  if (latChart) {
+    latChart.data.labels = labels;
+    latChart.data.datasets[0].data = latencyData;
+    latChart.update('none');
+  }
+
+  if (utilChart) {
+    utilChart.data.labels = labels;
+    utilChart.data.datasets[0].data = utilData;
+    utilChart.update('none');
+  }
+
+  // 9. D6: Event Feed Panel (Last 10 events)
+  renderEventFeed(ctrlEvents);
+};
+
+function renderEventFeed(events) {
+  const tbody = document.getElementById('events-table-body');
+  const countLabel = document.getElementById('events-count-label');
+  if (!tbody) return;
+
+  if (!events || events.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: var(--space-4);">No scaling or alert events recorded in current run.</td></tr>`;
+    if (countLabel) countLabel.innerText = '0 events';
+    return;
+  }
+
+  const last10 = events.slice(-10).reverse();
+  if (countLabel) countLabel.innerText = `${events.length} total (${last10.length} shown)`;
+
+  tbody.innerHTML = last10.map(evt => {
+    let badgeClass = 'status-badge status-badge-ok';
+    let typeName = evt.type || 'INFO';
+    if (typeName === 'CRITICAL' || typeName === 'SCALE_DOWN') {
+      badgeClass = 'status-badge status-badge-crit';
+    } else if (typeName === 'WARN' || typeName === 'SCALE_UP') {
+      badgeClass = 'status-badge status-badge-warn';
+    } else if (typeName === 'RECOVERY') {
+      badgeClass = 'status-badge status-badge-ok';
+    }
+
+    const timeStr = evt.time ? PERM.formatTime(evt.time) : '--:--:--';
+    const relStr = evt.time ? ` (${PERM.formatRelativeTime(evt.time)})` : '';
+    const signal = evt.signal ? `<span class="mono">${PERM.escapeHtml(evt.signal)}</span>` : '—';
+    const val = evt.value !== undefined ? `<span class="mono">${typeof evt.value === 'number' ? evt.value.toFixed(1) : evt.value}</span>` : '—';
+    const reason = PERM.escapeHtml(evt.reason || '—');
+
+    return `
+      <tr>
+        <td class="mono" style="font-size:0.75rem;">${timeStr}<span style="color:var(--text-muted); font-size:0.7rem;">${relStr}</span></td>
+        <td><span class="${badgeClass}">${typeName}</span></td>
+        <td>${signal} = ${val}</td>
+        <td class="mono" style="font-weight:600; color:var(--text-workers);">${PERM.escapeHtml(evt.action || evt.signal || '—')}</td>
+        <td style="font-size:0.8rem; color:var(--text-1);">${reason}</td>
+      </tr>
+    `;
+  }).join('');
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  initSparklines();
+  initOverviewCharts();
 });
 </script>
 {% endblock %}

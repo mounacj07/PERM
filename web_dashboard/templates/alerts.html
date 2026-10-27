@@ -1,76 +1,102 @@
 {% extends "base.html" %}
-{% block title %}PERM — Alerts & Scaling{% endblock %}
+{% block title %}PERM — Alerts &amp; Scaling{% endblock %}
+{% block page_title %}Alerts &amp; Scaling Audit{% endblock %}
 
 {% block content %}
 <!-- Top Mode Banner -->
-<div class="page-note" style="display:flex; justify-content:space-between; align-items:center;">
-  <div>
-    <span>🛡️</span>
-    <span>Model Status & Controller Mode:</span>
-    <strong class="mono" id="alerts-mode-label" style="color:var(--color-primary); font-size:0.95rem; margin-left:6px;">PERM v0 (old model)</strong>
-  </div>
-  <div style="font-size:0.8rem; color:var(--text-muted);">
-    Live capacity managed via bounded queue & core pinning
+<div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--accent-workers);">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-2);">
+    <div>
+      <span style="font-size:0.85rem; color:var(--text-1);">
+        <strong>Active Controller Mode:</strong>
+        <span class="mono" id="alerts-mode-label" style="color:var(--accent-workers); font-weight:700; margin-left:6px;">Controller not running</span>
+      </span>
+      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+        Auto-scaling dynamically pins and balances worker processes between 2 and 8 instances.
+      </span>
+    </div>
+    <div style="font-size:0.75rem; color:var(--text-muted);" class="mono">
+      Cadence: 1s &bull; Cooldown: 10s down / 2s up
+    </div>
   </div>
 </div>
 
 <!-- Worker Count Timeline Chart -->
-<div class="grid-full">
-  <div class="card">
-    <div class="chart-header">
-      <span class="chart-title-text">Worker Count Timeline (Cores Allocated over Time)</span>
-      <span style="font-size:0.75rem; color:var(--text-muted);">Min: 2 Workers, Max: 8 Workers</span>
+<div class="card" style="margin-bottom: var(--space-3);">
+  <div class="card-header">
+    <div>
+      <span class="card-title">Worker Count Timeline (Cores Allocated over Time)</span>
+      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+        Stepped worker count (Rolling 90s window) &bull; Bounds: Min 2 &bull; Max 8
+      </span>
     </div>
-    <div class="chart-wrapper">
-      <canvas id="chart-worker-timeline"></canvas>
+    <span class="status-badge" style="background:var(--bg-2); color:var(--accent-workers);" id="workers-status-pill">2 WORKERS</span>
+  </div>
+  <div class="chart-wrapper">
+    <div class="chart-empty-overlay">
+      <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
     </div>
+    <canvas id="chart-worker-timeline"></canvas>
   </div>
 </div>
 
 <!-- Tables Grid: Alerts & Scale Events -->
-<div class="grid-charts">
+<div class="grid-2col">
   <!-- Alerts Stream Table -->
   <div class="card">
-    <div class="chart-header">
-      <span class="chart-title-text">Active & Recent Alerts Stream</span>
+    <div class="card-header">
+      <div>
+        <span class="card-title">Active & Recent Alerts Stream</span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          WARN (&ge;70%), CRITICAL (&ge;85%), and RECOVERY (&lt;70%)
+        </span>
+      </div>
       <span id="alerts-count-badge" class="status-badge status-badge-ok">0 Active</span>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Severity</th>
-          <th>Metric / Signal</th>
-          <th>Value</th>
-          <th>Reason</th>
-        </tr>
-      </thead>
-      <tbody id="tbl-alerts-body">
-        <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: 1.5rem;">No active alerts recorded</td></tr>
-      </tbody>
-    </table>
+    <div style="overflow-x: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 110px;">Time</th>
+            <th style="width: 100px;">Severity</th>
+            <th style="width: 110px;">Signal</th>
+            <th style="width: 80px;">Value</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-alerts-body">
+          <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: var(--space-4);">No active alerts recorded</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 
-  <!-- Scale Events List -->
+  <!-- Scale Events Audit -->
   <div class="card">
-    <div class="chart-header">
-      <span class="chart-title-text">Scale Events Audit (Cold-Start Seconds)</span>
-      <span style="font-size:0.75rem; color:var(--color-purple); font-weight:700;">From /api/capacity</span>
+    <div class="card-header">
+      <div>
+        <span class="card-title">Scale Events Audit (Cold-Start Seconds)</span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          Historical worker resizing actions with decision rule and cold-start latency
+        </span>
+      </div>
+      <span id="scale-count-badge" class="status-badge" style="background:var(--bg-2); color:var(--text-2);">0 Scaled</span>
     </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Action</th>
-          <th>From → To</th>
-          <th>Cold-Start</th>
-          <th>Trigger Rule / Details</th>
-        </tr>
-      </thead>
-      <tbody id="tbl-scale-events-body">
-        <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: 1.5rem;">No scale events logged yet</td></tr>
-      </tbody>
-    </table>
+    <div style="overflow-x: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 110px;">Time</th>
+            <th style="width: 110px;">Action</th>
+            <th style="width: 100px;">Workers</th>
+            <th>Trigger Rule / Reason</th>
+          </tr>
+        </thead>
+        <tbody id="tbl-scale-events-body">
+          <tr><td colspan="4" style="color: var(--text-muted); text-align: center; padding: var(--space-4);">No scale events logged yet</td></tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -87,151 +113,119 @@ function initTimelineChart() {
       labels: [],
       datasets: [
         {
-          label: 'Active Worker Cores',
+          label: 'Active Worker Count',
           data: [],
-          borderColor: '#a855f7',
+          borderColor: '#8b5cf6',
           borderWidth: 2.5,
           stepped: 'before',
           pointRadius: 0,
           fill: true,
-          backgroundColor: 'rgba(168, 85, 247, 0.08)'
+          backgroundColor: 'rgba(139, 92, 246, 0.08)'
         }
       ]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+    options: PERM.createStandardChartOptions({
       scales: {
-        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', maxTicksLimit: 12 } },
         y: {
-          min: 1,
-          max: 9,
-          ticks: { stepSize: 1, color: '#64748b' },
-          grid: { color: 'rgba(255,255,255,0.04)' }
+          min: 0,
+          max: 8,
+          ticks: { stepSize: 1, color: '#71717a' },
+          grid: { color: 'rgba(255, 255, 255, 0.05)' }
         }
-      },
-      plugins: {
-        legend: { position: 'top', labels: { color: '#cbd5e1', boxWidth: 12, usePointStyle: true } }
       }
-    }
+    })
   });
 }
 
-function onStateUpdate(data) {
+window.PERM_PAGE_UPDATE = function(data) {
   const telem = data.telemetry_latest || {};
-  const history = data.telemetry_history || [];
+  const history = data.history || [];
   const ctrlEvents = data.controller_events || [];
-  const capacity = data.capacity || {};
-  const capEvents = capacity.scale_events || [];
 
   // Mode label
-  const modeLabel = data.mode_label || data.model_mode_label || 'Controller not running';
+  const modeLabel = data.mode_label || (data.controller_state && data.controller_state.mode ? `Demo controller: ${data.controller_state.mode}` : 'Controller not running');
   const elMode = document.getElementById('alerts-mode-label');
   if (elMode) elMode.innerText = modeLabel;
 
-  // Worker Timeline Chart
-  if (history.length > 0) {
-    const labels = history.map(r => {
-      const d = new Date(r.timestamp);
-      return d.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-    });
-    const workersSeries = history.map(r => r.active_workers || 2);
+  // Active workers pill
+  const activeW = telem.active_workers || (data.controller_state ? data.controller_state.current_workers : 2);
+  const pillW = document.getElementById('workers-status-pill');
+  if (pillW) pillW.innerText = `${activeW} WORKERS`;
 
+  // Timeline Chart (Rolling 90s)
+  const windowSlice = history.slice(-90);
+  const labels = windowSlice.map(r => PERM.formatTime(r.timestamp));
+  const workersSeries = windowSlice.map(r => r.active_workers || 2);
+
+  if (workerTimelineChart) {
     workerTimelineChart.data.labels = labels;
     workerTimelineChart.data.datasets[0].data = workersSeries;
     workerTimelineChart.update('none');
   }
 
-  // Alerts Table: combine controller_events and alert_history
+  // Alerts Table
   const tblAlerts = document.getElementById('tbl-alerts-body');
-  let alertItems = [];
-
-  if (ctrlEvents.length > 0) {
-    alertItems = ctrlEvents.filter(e => ['WARN', 'CRITICAL', 'RECOVERY'].includes(e.type));
-  } else if (data.alerts_history && data.alerts_history.length > 0) {
-    alertItems = data.alerts_history.map(a => ({
-      time: a.timestamp,
-      type: a.severity,
-      signal: a.metric,
-      value: a.forecast_value_30s,
-      reason: `SLO breach in ~${a.lead_time_sec}s`
-    }));
-  }
+  const alertsCountBadge = document.getElementById('alerts-count-badge');
+  const alertItems = ctrlEvents.filter(e => ['WARN', 'CRITICAL', 'RECOVERY'].includes(e.type));
 
   if (alertItems.length === 0) {
-    tblAlerts.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No active alerts recorded</td></tr>`;
-    document.getElementById('alerts-count-badge').className = 'status-badge status-badge-ok';
-    document.getElementById('alerts-count-badge').innerText = '0 Active';
+    tblAlerts.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:var(--space-4);">No active alerts recorded</td></tr>`;
+    if (alertsCountBadge) {
+      alertsCountBadge.className = 'status-badge status-badge-ok';
+      alertsCountBadge.innerText = '0 Active';
+    }
   } else {
-    document.getElementById('alerts-count-badge').className = alertItems.some(a => a.type === 'CRITICAL')
-      ? 'status-badge status-badge-crit'
-      : 'status-badge status-badge-warn';
-    document.getElementById('alerts-count-badge').innerText = `${alertItems.length} Logged`;
+    const hasCrit = alertItems.some(a => a.type === 'CRITICAL');
+    if (alertsCountBadge) {
+      alertsCountBadge.className = hasCrit ? 'status-badge status-badge-crit' : 'status-badge status-badge-warn';
+      alertsCountBadge.innerText = `${alertItems.length} Logged`;
+    }
 
     tblAlerts.innerHTML = alertItems.slice(-8).reverse().map(a => {
-      const t = new Date(a.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-      const badge = a.type === 'CRITICAL'
-        ? '<span class="status-badge status-badge-crit">CRITICAL</span>'
-        : (a.type === 'WARN' || a.type === 'WARNING'
-            ? '<span class="status-badge status-badge-warn">WARN</span>'
-            : '<span class="status-badge status-badge-ok">RECOVERY</span>');
-      return `<tr>
-        <td class="mono">${t}</td>
-        <td>${badge}</td>
-        <td class="mono">${a.signal || 'pool_utilization'}</td>
-        <td class="mono" style="font-weight:600;">${a.value}${typeof a.value === 'number' || !isNaN(parseFloat(a.value)) ? '%' : ''}</td>
-        <td style="color:var(--text-main); font-size:0.75rem;">${a.reason || ''}</td>
-      </tr>`;
+      const timeStr = a.time ? PERM.formatTime(a.time) : '--:--:--';
+      let badgeClass = 'status-badge status-badge-ok';
+      if (a.type === 'CRITICAL') badgeClass = 'status-badge status-badge-crit';
+      else if (a.type === 'WARN') badgeClass = 'status-badge status-badge-warn';
+
+      const valStr = typeof a.value === 'number' ? `${a.value.toFixed(1)}%` : (a.value || '—');
+      return `
+        <tr>
+          <td class="mono" style="font-size:0.75rem;">${timeStr}</td>
+          <td><span class="${badgeClass}">${a.type}</span></td>
+          <td class="mono">${PERM.escapeHtml(a.signal || 'pool_util')}</td>
+          <td class="mono" style="font-weight:600;">${valStr}</td>
+          <td style="font-size:0.78rem; color:var(--text-1);">${PERM.escapeHtml(a.reason || '—')}</td>
+        </tr>
+      `;
     }).join('');
   }
 
-  // Scale Events List (from /api/capacity scale_events or controller_events)
+  // Scale Events Table
   const tblScale = document.getElementById('tbl-scale-events-body');
-  let scaleItems = [];
-
-  if (capEvents.length > 0) {
-    scaleItems = capEvents.map(e => ({
-      time: e.timestamp,
-      action: e.type.toUpperCase(),
-      from: e.from_workers,
-      to: e.to_workers,
-      cold_start: `${e.duration_seconds.toFixed(3)}s`,
-      details: `os_ready=${e.os_ready_seconds}s, delay=${e.provision_delay_sec}s`
-    }));
-  } else if (ctrlEvents.length > 0) {
-    scaleItems = ctrlEvents.filter(e => ['SCALE_UP', 'SCALE_DOWN'].includes(e.type)).map(e => {
-      const fromMatch = e.reason.match(/from=(\d+)/);
-      const fromW = fromMatch ? fromMatch[1] : '?';
-      return {
-        time: e.time,
-        action: e.type,
-        from: fromW,
-        to: e.value,
-        cold_start: '1.414s (est)',
-        details: e.reason
-      };
-    });
-  }
+  const scaleBadge = document.getElementById('scale-count-badge');
+  const scaleItems = ctrlEvents.filter(e => ['SCALE_UP', 'SCALE_DOWN'].includes(e.type));
 
   if (scaleItems.length === 0) {
-    tblScale.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No scale events logged yet</td></tr>`;
+    tblScale.innerHTML = `<tr><td colspan="4" style="color:var(--text-muted);text-align:center;padding:var(--space-4);">No scale events logged yet</td></tr>`;
+    if (scaleBadge) scaleBadge.innerText = '0 Scaled';
   } else {
+    if (scaleBadge) scaleBadge.innerText = `${scaleItems.length} Events`;
     tblScale.innerHTML = scaleItems.slice(-8).reverse().map(e => {
-      const t = new Date(e.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-      const badge = e.action === 'SCALE_UP'
-        ? '<span class="status-badge status-badge-ok">SCALE_UP</span>'
-        : '<span class="status-badge status-badge-warn">SCALE_DOWN</span>';
-      return `<tr>
-        <td class="mono">${t}</td>
-        <td>${badge}</td>
-        <td class="mono" style="font-weight:700;">${e.from} → ${e.to} workers</td>
-        <td class="mono" style="color:var(--color-primary); font-weight:700;">${e.cold_start}</td>
-        <td style="color:var(--text-muted); font-size:0.75rem;">${e.details}</td>
-      </tr>`;
+      const timeStr = e.time ? PERM.formatTime(e.time) : '--:--:--';
+      const isUp = e.type === 'SCALE_UP';
+      const badgeClass = isUp ? 'status-badge status-badge-ok' : 'status-badge status-badge-warn';
+
+      return `
+        <tr>
+          <td class="mono" style="font-size:0.75rem;">${timeStr}</td>
+          <td><span class="${badgeClass}">${e.type}</span></td>
+          <td class="mono" style="font-weight:700; color:var(--accent-workers);">${PERM.escapeHtml(String(e.value))} workers</td>
+          <td style="font-size:0.78rem; color:var(--text-1);">${PERM.escapeHtml(e.reason || '—')}</td>
+        </tr>
+      `;
     }).join('');
   }
-}
+};
 
 document.addEventListener('DOMContentLoaded', () => {
   initTimelineChart();

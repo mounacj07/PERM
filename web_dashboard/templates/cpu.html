@@ -1,203 +1,261 @@
 {% extends "base.html" %}
 {% block title %}PERM — CPU Utilization{% endblock %}
+{% block page_title %}CPU Utilization{% endblock %}
 
 {% block content %}
-<!-- Page Note (EXACT required text) -->
-<div class="page-note">
-  <span>💡</span>
-  <strong>Worker CPU = how busy the active workers are (0-100%). Scaling up adds workers.</strong>
-</div>
-
-<!-- CPU KPI Gauges -->
-<div class="grid-kpi">
-  <div class="card card-kpi kpi-arrivals">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Worker CPU (% of active workers)</span>
-      <span class="card-tag mono">MAIN GAUGE</span>
-    </div>
-    <div class="card-value num" id="val-worker-cpu" style="color: var(--color-primary);">-- %</div>
-    <div class="card-subtext">
-      <span>SLO Thresholds:</span>
-      <span class="num" style="color: var(--color-warning); font-weight: 700;">70% WARN</span>
-      <span>/</span>
-      <span class="num" style="color: var(--color-danger); font-weight: 700;">85% CRIT</span>
-    </div>
-  </div>
-
-  <div class="card card-kpi kpi-workers">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Whole-machine CPU</span>
-      <span class="card-tag mono">SYSTEM</span>
-    </div>
-    <div class="card-value num" id="val-sys-cpu" style="color: #94a3b8;">-- %</div>
-    <div class="card-subtext">Across 16 Logical Cores</div>
-  </div>
-
-  <div class="card card-kpi kpi-latency">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Worker Utilization</span>
-      <span class="card-tag mono">BUSY / ACTIVE</span>
-    </div>
-    <div class="card-value num" id="val-worker-util" style="color: var(--color-success);">-- %</div>
-    <div class="card-subtext" id="sub-worker-util">Busy: 0 / 2 Workers</div>
-  </div>
-
-  <div class="card card-kpi kpi-queue">
-    <div class="card-header-sm">
-      <span class="card-title-sm">Queue Depth</span>
-      <span class="card-tag mono">PENDING</span>
-    </div>
-    <div class="card-value num" id="val-qdepth" style="color: var(--color-warning);">0</div>
-    <div class="card-subtext">Bounded Queue: Cap 20</div>
+<!-- Page Explanation Note -->
+<div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--accent-traffic);">
+  <div style="font-size: 0.85rem; color: var(--text-1);">
+    <strong>Worker CPU = how busy the active workers are (0-100%). Scaling up adds workers.</strong>
+    <span style="display:block; color: var(--text-muted); font-size: 0.78rem; margin-top: 2px;">
+      Calculated from worker process CPU normalized by provisioned worker count. Whole-machine CPU reflects aggregate OS host load.
+    </span>
   </div>
 </div>
 
-<!-- Main CPU Time-Series Chart -->
-<div class="grid-full">
-  <div class="card">
-    <div class="chart-header">
-      <span class="chart-title-text">Worker CPU vs. Whole-Machine CPU (Recent Telemetry)</span>
-      <span style="font-size:0.75rem; color:var(--text-muted);">Thresholds: 70% Warning, 85% Critical</span>
+<!-- Primary CPU KPI Cards Row -->
+<div class="kpi-grid">
+  <!-- Worker CPU Main Gauge -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Worker CPU (% Active)</span>
+      <span class="kpi-status-dot status-ok" id="dot-worker-cpu"></span>
     </div>
-    <div class="chart-wrapper">
-      <canvas id="chart-cpu-full"></canvas>
+    <div class="kpi-value text-ok" id="val-worker-cpu">0.0%</div>
+    <div class="kpi-subline">
+      <span>Warn: 70% &bull; Crit: 85%</span>
     </div>
+  </div>
+
+  <!-- Whole-Machine CPU -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Whole-Machine CPU</span>
+      <span class="kpi-status-dot" id="dot-sys-cpu"></span>
+    </div>
+    <div class="kpi-value" id="val-sys-cpu">0.0%</div>
+    <div class="kpi-subline">
+      <span id="sub-sys-cores">Across Host Cores</span>
+    </div>
+  </div>
+
+  <!-- Worker Utilization Ratio -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Worker Concurrency</span>
+      <span class="kpi-status-dot status-workers"></span>
+    </div>
+    <div class="kpi-value text-workers" id="val-worker-concurrency">0 / 2</div>
+    <div class="kpi-subline">
+      <span>Active Worker Processes</span>
+    </div>
+  </div>
+
+  <!-- Queue Depth -->
+  <div class="kpi-card">
+    <div class="kpi-header">
+      <span class="kpi-title">Queue Depth</span>
+      <span class="kpi-status-dot status-ok" id="dot-qdepth"></span>
+    </div>
+    <div class="kpi-value" id="val-qdepth">0 / 20</div>
+    <div class="kpi-subline">
+      <span>Pending in Bounded Queue</span>
+    </div>
+  </div>
+</div>
+
+<!-- Main CPU Time-Series Chart with Bands -->
+<div class="card" style="margin-bottom: var(--space-3);">
+  <div class="card-header">
+    <div>
+      <span class="card-title">Worker CPU vs. Whole-Machine CPU (Rolling 90s)</span>
+      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+        Solid: Worker CPU &bull; Dashed: Host CPU &bull; Shaded: Warning Band (70%–85%) &amp; Critical Band (&ge;85%)
+      </span>
+    </div>
+    <span id="cpu-status-badge" class="status-badge status-badge-ok">NORMAL</span>
+  </div>
+
+  <!-- Small Stats Row (D8: min/mean/max over window) -->
+  <div class="stats-row">
+    <div class="stat-item">
+      <span class="stat-label">Window Min</span>
+      <span class="stat-value mono num" id="stat-cpu-min">0.0%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Window Mean</span>
+      <span class="stat-value mono num" id="stat-cpu-mean">0.0%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Window Max</span>
+      <span class="stat-value mono num" id="stat-cpu-max">0.0%</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-label">Logical Cores</span>
+      <span class="stat-value mono num" id="stat-cpu-cores">--</span>
+    </div>
+  </div>
+
+  <div class="chart-wrapper">
+    <div class="chart-empty-overlay">
+      <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
+    </div>
+    <canvas id="chart-cpu-main"></canvas>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-let cpuFullChart = null;
+let cpuMainChart = null;
 
-function initCpuChart() {
-  const ctx = document.getElementById('chart-cpu-full').getContext('2d');
-  cpuFullChart = new Chart(ctx, {
+function initCpuPageChart() {
+  const ctx = document.getElementById('chart-cpu-main').getContext('2d');
+  cpuMainChart = new Chart(ctx, {
     type: 'line',
     data: {
       labels: [],
       datasets: [
         {
-          label: 'Worker CPU (% of active workers)',
+          label: 'Worker CPU (% active)',
           data: [],
-          borderColor: '#38bdf8',
-          borderWidth: 2.5,
+          borderColor: '#2563eb',
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
+          borderWidth: 2.2,
           pointRadius: 0,
-          tension: 0.25,
-          fill: true,
-          backgroundColor: 'rgba(56, 189, 248, 0.08)',
-          order: 1
+          tension: 0.2,
+          fill: true
         },
         {
-          label: 'Whole-machine CPU (%)',
+          label: 'Whole-Machine CPU (%)',
           data: [],
-          borderColor: '#94a3b8',
-          borderWidth: 1.8,
+          borderColor: '#71717a',
+          borderWidth: 1.5,
           borderDash: [4, 4],
           pointRadius: 0,
-          tension: 0.25,
-          fill: false,
-          order: 2
-        },
-        {
-          label: 'SLO Warning (70%)',
-          data: [],
-          borderColor: 'rgba(245, 158, 11, 0.65)',
-          borderWidth: 1,
-          borderDash: [3, 3],
-          pointRadius: 0,
-          order: 3
-        },
-        {
-          label: 'SLO Critical (85%)',
-          data: [],
-          borderColor: 'rgba(244, 63, 94, 0.65)',
-          borderWidth: 1,
-          borderDash: [3, 3],
-          pointRadius: 0,
-          order: 3
+          tension: 0.2,
+          fill: false
         }
       ]
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
+    options: PERM.createStandardChartOptions({
       scales: {
-        x: {
-          grid: { color: 'rgba(255,255,255,0.03)' },
-          ticks: { color: '#64748b', maxTicksLimit: 12 }
-        },
         y: {
           min: 0,
-          max: 105,
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#64748b' }
+          max: 100,
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { color: '#71717a', font: { size: 10 } }
         }
       },
       plugins: {
-        legend: {
-          position: 'top',
-          labels: { color: '#cbd5e1', boxWidth: 12, usePointStyle: true }
+        permAnnotations: {
+          bands: [
+            { yMin: 70, yMax: 85, color: 'rgba(245, 158, 11, 0.10)' },
+            { yMin: 85, yMax: 100, color: 'rgba(239, 68, 68, 0.12)' }
+          ],
+          lines: [
+            { y: 70, color: '#f59e0b', width: 1, dash: [4, 4], label: 'Warn 70%' },
+            { y: 85, color: '#ef4444', width: 1, dash: [4, 4], label: 'Crit 85%' }
+          ]
         }
       }
-    }
+    })
   });
 }
 
-function onStateUpdate(data) {
+window.PERM_PAGE_UPDATE = function(data) {
   const telem = data.telemetry_latest || {};
-  const history = data.telemetry_history || [];
+  const history = data.history || [];
+  const cpus = data.logical_cpus || 16;
 
-  const workerCpu = data.worker_cpu_pct_active !== undefined
-    ? data.worker_cpu_pct_active
-    : (telem.worker_cpu_percent !== undefined
-        ? Math.min(100.0, Math.max(0.0, (telem.worker_cpu_percent * 16.0) / Math.max(1, telem.active_workers || 2)))
-        : 0.0);
+  // Update logical cores display dynamically (No hardcoded 16!)
+  const coresEl = document.getElementById('sub-sys-cores');
+  if (coresEl) coresEl.innerText = `Across ${cpus} Logical Cores`;
+  const statCoresEl = document.getElementById('stat-cpu-cores');
+  if (statCoresEl) statCoresEl.innerText = `${cpus}`;
 
-  const elWorkerCpu = document.getElementById('val-worker-cpu');
-  elWorkerCpu.innerText = `${workerCpu.toFixed(1)}%`;
-  elWorkerCpu.style.color = workerCpu >= 85 ? '#f43f5e' : (workerCpu >= 70 ? '#f59e0b' : '#38bdf8');
-
-  const sysCpu = telem.cpu_percent !== undefined ? telem.cpu_percent : 0.0;
-  document.getElementById('val-sys-cpu').innerText = `${sysCpu.toFixed(1)}%`;
-
-  const busy = telem.busy_workers !== undefined ? telem.busy_workers : 0;
-  const workers = telem.active_workers || 2;
-  const util = workers > 0 ? (busy / workers) * 100.0 : 0.0;
-  document.getElementById('val-worker-util').innerText = `${util.toFixed(1)}%`;
-  document.getElementById('sub-worker-util').innerText = `Busy: ${busy} / ${workers} Workers`;
-
-  const q = telem.queue_depth !== undefined ? telem.queue_depth : 0;
-  document.getElementById('val-qdepth').innerText = q;
-
-  if (history.length > 0) {
-    const labels = history.map(r => {
-      const d = new Date(r.timestamp);
-      return d.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-    });
-
-    const wCpuSeries = history.map(r => {
-      const wCpu = r.worker_cpu_percent !== undefined ? r.worker_cpu_percent : (r.cpu_percent || 0);
-      const w = r.active_workers || 2;
-      return Math.min(100.0, Math.max(0.0, (wCpu * 16.0) / Math.max(1, w)));
-    });
-
-    const sysCpuSeries = history.map(r => r.cpu_percent || 0);
-    const warn70 = new Array(labels.length).fill(70);
-    const crit85 = new Array(labels.length).fill(85);
-
-    cpuFullChart.data.labels = labels;
-    cpuFullChart.data.datasets[0].data = wCpuSeries;
-    cpuFullChart.data.datasets[1].data = sysCpuSeries;
-    cpuFullChart.data.datasets[2].data = warn70;
-    cpuFullChart.data.datasets[3].data = crit85;
-    cpuFullChart.update('none');
+  // Worker CPU calculation
+  let workerCpuPct = 0.0;
+  if (telem.worker_cpu_per_active_pct !== undefined) {
+    workerCpuPct = telem.worker_cpu_per_active_pct;
+  } else if (telem.worker_cpu_percent !== undefined) {
+    const w = Math.max(1, telem.active_workers || 2);
+    workerCpuPct = Math.min(100.0, (telem.worker_cpu_percent * cpus) / w);
   }
-}
+
+  const valWorkerCpu = document.getElementById('val-worker-cpu');
+  const dotWorkerCpu = document.getElementById('dot-worker-cpu');
+  const cpuBadge = document.getElementById('cpu-status-badge');
+
+  if (valWorkerCpu) {
+    valWorkerCpu.innerText = `${workerCpuPct.toFixed(1)}%`;
+    if (workerCpuPct >= 85) {
+      valWorkerCpu.className = 'kpi-value text-crit';
+      if (dotWorkerCpu) dotWorkerCpu.className = 'kpi-status-dot status-crit';
+      if (cpuBadge) { cpuBadge.className = 'status-badge status-badge-crit'; cpuBadge.innerText = 'CRITICAL (≥85%)'; }
+    } else if (workerCpuPct >= 70) {
+      valWorkerCpu.className = 'kpi-value text-warn';
+      if (dotWorkerCpu) dotWorkerCpu.className = 'kpi-status-dot status-warn';
+      if (cpuBadge) { cpuBadge.className = 'status-badge status-badge-warn'; cpuBadge.innerText = 'WARNING (≥70%)'; }
+    } else {
+      valWorkerCpu.className = 'kpi-value text-ok';
+      if (dotWorkerCpu) dotWorkerCpu.className = 'kpi-status-dot status-ok';
+      if (cpuBadge) { cpuBadge.className = 'status-badge status-badge-ok'; cpuBadge.innerText = 'NORMAL'; }
+    }
+  }
+
+  // System CPU
+  const sysCpu = telem.system_cpu_percent !== undefined ? telem.system_cpu_percent : 0.0;
+  const valSysCpu = document.getElementById('val-sys-cpu');
+  if (valSysCpu) valSysCpu.innerText = `${sysCpu.toFixed(1)}%`;
+
+  // Worker Concurrency
+  const activeW = telem.active_workers || (data.controller_state ? data.controller_state.current_workers : 2);
+  const busyW = telem.busy_workers !== undefined ? telem.busy_workers : 0;
+  const valConc = document.getElementById('val-worker-concurrency');
+  if (valConc) valConc.innerText = `${busyW} / ${activeW}`;
+
+  // Queue Depth
+  const qd = telem.queue_depth !== undefined ? telem.queue_depth : 0;
+  const valQd = document.getElementById('val-qdepth');
+  const dotQd = document.getElementById('dot-qdepth');
+  if (valQd) {
+    valQd.innerText = `${qd} / 20`;
+    if (dotQd) dotQd.className = qd >= 10 ? 'kpi-status-dot status-crit' : (qd >= 4 ? 'kpi-status-dot status-warn' : 'kpi-status-dot status-ok');
+  }
+
+  // Rolling 90s window
+  const windowSlice = history.slice(-90);
+  const labels = windowSlice.map(r => PERM.formatTime(r.timestamp));
+  const workerCpuData = windowSlice.map(r => {
+    if (r.worker_cpu_per_active_pct !== undefined) return +r.worker_cpu_per_active_pct.toFixed(1);
+    if (r.worker_cpu_percent !== undefined) {
+      const w = Math.max(1, r.active_workers || 2);
+      return +Math.min(100.0, (r.worker_cpu_percent * cpus) / w).toFixed(1);
+    }
+    return 0.0;
+  });
+  const sysCpuData = windowSlice.map(r => +(r.system_cpu_percent || 0).toFixed(1));
+
+  // Compute stats over window
+  const stats = PERM.computeStats(workerCpuData);
+  const minEl = document.getElementById('stat-cpu-min');
+  const meanEl = document.getElementById('stat-cpu-mean');
+  const maxEl = document.getElementById('stat-cpu-max');
+  if (minEl) minEl.innerText = `${stats.min.toFixed(1)}%`;
+  if (meanEl) meanEl.innerText = `${stats.mean.toFixed(1)}%`;
+  if (maxEl) maxEl.innerText = `${stats.max.toFixed(1)}%`;
+
+  if (cpuMainChart) {
+    cpuMainChart.data.labels = labels;
+    cpuMainChart.data.datasets[0].data = workerCpuData;
+    cpuMainChart.data.datasets[1].data = sysCpuData;
+    cpuMainChart.update('none');
+  }
+};
 
 document.addEventListener('DOMContentLoaded', () => {
-  initCpuChart();
+  initCpuPageChart();
 });
 </script>
 {% endblock %}
