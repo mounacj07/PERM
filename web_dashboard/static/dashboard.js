@@ -178,8 +178,8 @@ async function pollDashboardState() {
 
     updateMetrics(data);
     updateCharts(data);
-    updateRemediation(data.remediation);
-    updateAlertsTable(data.alerts_history);
+    updateRemediation(data.remediation, data.controller_events);
+    updateAlertsTable(data.alerts_history, data.controller_events);
     checkForNewScalingEvents(data.remediation);
     checkForNewAlerts(data.active_alerts, data.alerts_history);
   } catch (err) {
@@ -194,24 +194,27 @@ function updateMetrics(data) {
   const telem = data.telemetry_latest || {};
   const pred  = data.prediction_latest || {};
   const remed = data.remediation || {};
+  const ctrlState = data.controller_state || {};
 
-  if (telem.cpu_percent !== undefined) {
-    const v = telem.cpu_percent.toFixed(1);
-    const el = document.getElementById('val-cpu');
-    el.innerText = `${v}%`;
-    el.style.color = telem.cpu_percent >= 85 ? '#f43f5e'
-                   : telem.cpu_percent >= 70 ? '#f59e0b'
-                   : '#38bdf8';
+  // Controller mode badge
+  if (ctrlState.mode) {
+    const badge = document.getElementById('controller-mode-badge');
+    if (badge) badge.innerText = ctrlState.mode.toUpperCase();
   }
-  if (pred.predicted_cpu_30s !== undefined) {
-    const predCpu = pred.predicted_cpu_30s.toFixed(1);
-    const drivers = (pred.top_drivers_cpu || []).slice(0,2)
-      .map(d => `<span class="driver-pill mono">⚡ ${d}</span>`).join(' ');
-    const color = pred.predicted_cpu_30s >= 85 ? '#f43f5e'
-                : pred.predicted_cpu_30s >= 70 ? '#f59e0b'
-                : '#94a3b8';
-    document.getElementById('sub-cpu').innerHTML =
-      `<span style="color:${color};font-weight:700;">${predCpu}%</span> ${drivers}`;
+
+  // Pool utilization main gauge
+  const poolUtil = (data.pool_utilization !== undefined)
+    ? data.pool_utilization
+    : (telem.worker_cpu_percent !== undefined
+        ? Math.min(100.0, Math.max(0.0, (telem.worker_cpu_percent * 16.0) / Math.max(1, telem.active_workers || 2)))
+        : 0.0);
+
+  const elCpu = document.getElementById('val-cpu');
+  if (elCpu) {
+    elCpu.innerText = `${poolUtil.toFixed(1)}%`;
+    elCpu.style.color = poolUtil >= 85 ? '#f43f5e'
+                      : poolUtil >= 70 ? '#f59e0b'
+                      : '#38bdf8';
   }
 
   if (telem.avg_latency_ms !== undefined) {
@@ -228,27 +231,28 @@ function updateMetrics(data) {
       `<span style="color:${color};font-weight:700;">${predLat} ms</span> ${drivers}`;
   }
 
-  const activeWorkers = remed.active_workers || 2;
-  const maxWorkers    = remed.max_workers    || 10;
-  const mode          = remed.mode           || 'AUTO';
-  document.getElementById('val-workers').innerText = `${activeWorkers} / ${maxWorkers}`;
+  const activeWorkers = (ctrlState.current_workers !== undefined)
+    ? ctrlState.current_workers
+    : (telem.active_workers || remed.active_workers || 2);
+  document.getElementById('val-workers').innerText = `${activeWorkers} / 8`;
   document.getElementById('sub-workers').innerText =
-    `Mode: ${mode === 'AUTO' ? 'AUTO ALLOCATION' : 'MANUAL APPROVAL'}`;
+    `Mode: ${ctrlState.mode ? ctrlState.mode.toUpperCase() : 'DEMO CONTROLLER'}`;
 
   // System health badge
-  const activeAlerts = data.active_alerts || [];
+  const ctrlEvents = data.controller_events || [];
+  const alertState = ctrlState.alert_state || 'NORMAL';
   const statusEl   = document.getElementById('val-status');
   const subAlertsEl = document.getElementById('sub-alerts');
 
-  if (activeAlerts.length > 0) {
-    const hasCrit = activeAlerts.some(a => a.severity === 'CRITICAL');
-    statusEl.innerHTML = hasCrit
-      ? `<span class="status-badge status-badge-crit pulse-badge">🔴 PROACTIVE CRITICAL</span>`
-      : `<span class="status-badge status-badge-warn pulse-badge">🟡 PROACTIVE WARNING</span>`;
-    subAlertsEl.innerText = `${activeAlerts.length} Active Alert(s)`;
+  if (alertState === 'CRITICAL') {
+    statusEl.innerHTML = `<span class="status-badge status-badge-crit pulse-badge">🔴 POOL CRITICAL (≥85%)</span>`;
+    subAlertsEl.innerText = 'Pool Utilization Critical';
+  } else if (alertState === 'WARN') {
+    statusEl.innerHTML = `<span class="status-badge status-badge-warn pulse-badge">🟡 POOL WARNING (≥70%)</span>`;
+    subAlertsEl.innerText = 'Pool Utilization Warning';
   } else {
     statusEl.innerHTML = `<span class="status-badge status-badge-ok">✅ SYSTEM NORMAL</span>`;
-    subAlertsEl.innerText = '0 Active Alerts';
+    subAlertsEl.innerText = 'Pool Utilization < 70%';
   }
 }
 
@@ -272,10 +276,16 @@ function updateCharts(data) {
     return t.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
   });
 
-  // Telemetry actuals (null for future points)
-  const cpuActual = fullTimeline.map((ts, idx) =>
-    idx < telemHistory.length ? telemHistory[idx].cpu_percent : null
-  );
+  // Pool utilization actuals (null for future points)
+  const cpuActual = fullTimeline.map((ts, idx) => {
+    if (idx < telemHistory.length) {
+      const r = telemHistory[idx];
+      const wCpu = r.worker_cpu_percent !== undefined ? r.worker_cpu_percent : (r.cpu_percent || 0);
+      const wCount = r.active_workers || 2;
+      return Math.min(100.0, Math.max(0.0, (wCpu * 16.0) / Math.max(1, wCount)));
+    }
+    return null;
+  });
   const latActual = fullTimeline.map((ts, idx) =>
     idx < telemHistory.length ? telemHistory[idx].avg_latency_ms : null
   );
@@ -319,6 +329,7 @@ function updateCharts(data) {
   });
 
   cpuChart.data.labels           = labels;
+  cpuChart.data.datasets[0].label = 'Pool Utilization % (3s smoothed)';
   cpuChart.data.datasets[0].data = cpuActual;
   cpuChart.data.datasets[1].data = cpuForecast;
   cpuChart.data.datasets[2].data = cpuWarn;
@@ -333,54 +344,59 @@ function updateCharts(data) {
   latChart.update('none');
 }
 
-/* ─── REMEDIATION ─────────────────────────────────────────── */
-function updateRemediation(remed) {
-  if (!remed) return;
-  const mode = remed.mode || 'AUTO';
-
-  document.getElementById('btn-mode-auto').classList.toggle('active', mode === 'AUTO');
-  document.getElementById('btn-mode-manual').classList.toggle('active', mode !== 'AUTO');
-
-  const pendingList = remed.pending_approvals || [];
-  const banner      = document.getElementById('approval-banner');
-
-  if (mode === 'MANUAL' && pendingList.length > 0) {
-    const req = pendingList[pendingList.length - 1];
-    activePendingRequestId = req.request_id;
-    document.getElementById('banner-message').innerText =
-      req.message || 'Proactive alert detected. Approve scaling to additional worker cores?';
-    document.getElementById('banner-lead-time').innerText =
-      `~${req.lead_time_sec || 25.5}s LEAD TIME`;
-    banner.style.display = 'block';
-  } else {
-    banner.style.display = 'none';
-    activePendingRequestId = null;
-  }
-
-  const historyList = remed.scaling_history || [];
-  const tblHistory  = document.getElementById('tbl-history');
-  if (historyList.length === 0) {
-    tblHistory.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No scaling events logged yet</td></tr>`;
-  } else {
-    tblHistory.innerHTML = historyList.slice(0, 8).map(h => {
-      const t = new Date(h.timestamp).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
-      const badge = h.mode === 'AUTO'
-        ? '<span class="tag-auto mono">AUTO</span>'
-        : '<span class="tag-manual mono">MANUAL</span>';
-      return `<tr>
-        <td class="mono">${t}</td>
-        <td>${badge}</td>
-        <td style="font-weight:500;">${h.action}</td>
-        <td class="mono">${h.workers_before} → ${h.workers_after} cores</td>
-        <td style="color:var(--text-muted);">${h.approved_by}</td>
-      </tr>`;
-    }).join('');
+/* ─── REMEDIATION & SCALING AUDIT LOG ─────────────────────── */
+function updateRemediation(remed, controllerEvents) {
+  if (controllerEvents && controllerEvents.length > 0) {
+    const scaleList = controllerEvents.filter(e => ['SCALE_UP', 'SCALE_DOWN'].includes(e.type));
+    const tblHistory = document.getElementById('tbl-history');
+    if (scaleList.length === 0) {
+      tblHistory.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No scaling events logged yet</td></tr>`;
+    } else {
+      tblHistory.innerHTML = scaleList.slice(-10).reverse().map(h => {
+        const t = new Date(h.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+        const badge = h.type === 'SCALE_UP'
+          ? '<span class="tag-auto mono" style="color:#10b981;">SCALE_UP</span>'
+          : '<span class="tag-manual mono" style="color:#f59e0b;">SCALE_DOWN</span>';
+        const rulePart = (h.reason && h.reason.includes('rule=')) ? h.reason.split(';')[0].replace('rule=', '') : 'reactive';
+        return `<tr>
+          <td class="mono">${t}</td>
+          <td>${badge}</td>
+          <td class="mono" style="font-weight:600;">${h.value} workers</td>
+          <td class="mono" style="color:var(--color-primary);">${rulePart}</td>
+          <td style="color:var(--text-muted);font-size:0.75rem;">${h.reason}</td>
+        </tr>`;
+      }).join('');
+    }
   }
 }
 
-/* ─── ALERTS TABLE ────────────────────────────────────────── */
-function updateAlertsTable(alerts) {
+/* ─── ALERTS TABLE (controller_events.csv) ────────────────── */
+function updateAlertsTable(alerts, controllerEvents) {
   const tbl = document.getElementById('tbl-alerts');
+  if (controllerEvents && controllerEvents.length > 0) {
+    const alertList = controllerEvents.filter(e => ['WARN', 'CRITICAL', 'RECOVERY'].includes(e.type));
+    if (alertList.length === 0) {
+      tbl.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No controller alerts logged yet</td></tr>`;
+      return;
+    }
+    tbl.innerHTML = alertList.slice(-10).reverse().map(a => {
+      const t = new Date(a.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+      const badge = a.type === 'CRITICAL'
+        ? '<span class="status-badge status-badge-crit">CRITICAL</span>'
+        : (a.type === 'WARN'
+            ? '<span class="status-badge status-badge-warn">WARN</span>'
+            : '<span class="status-badge status-badge-ok">RECOVERY</span>');
+      return `<tr>
+        <td class="mono">${t}</td>
+        <td>${badge}</td>
+        <td class="mono">${a.signal || 'pool_utilization'}</td>
+        <td class="mono" style="font-weight:600;">${a.value}%</td>
+        <td style="color:var(--text-main);">${a.reason || ''}</td>
+      </tr>`;
+    }).join('');
+    return;
+  }
+
   if (!alerts || alerts.length === 0) {
     tbl.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No active alerts recorded</td></tr>`;
     return;

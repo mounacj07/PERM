@@ -637,6 +637,10 @@
       </div>
     </div>
     <div class="header-controls">
+      <div id="controller-badge-wrap" style="display:flex;align-items:center;gap:6px;background:#090e17;border:1px solid var(--border-color);padding:5px 10px;border-radius:8px;">
+        <span style="font-size:0.7rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;">Controller Mode:</span>
+        <span id="controller-mode-badge" class="tag-auto mono" style="font-size:0.75rem;padding:2px 8px;border-radius:4px;background:rgba(56,189,248,0.15);color:#38bdf8;font-weight:700;">PREDICTIVE</span>
+      </div>
       <div class="segmented-control">
         <button class="segment-btn active" id="btn-mode-auto" onclick="setScalingMode('AUTO')">AUTO ALLOCATION</button>
         <button class="segment-btn" id="btn-mode-manual" onclick="setScalingMode('MANUAL')">MANUAL APPROVAL</button>
@@ -701,13 +705,13 @@
   <div class="grid-kpi">
     <div class="card card-kpi kpi-cpu">
       <div class="card-header-sm">
-        <span class="card-title-sm">CPU Utilization</span>
-        <span class="card-tag mono">TELEMETRY 1s</span>
+        <span class="card-title-sm">Pool Utilization</span>
+        <span class="card-tag mono">SMOOTHED 3s</span>
       </div>
       <div class="card-value num" id="val-cpu" style="color: var(--color-primary);">-- %</div>
       <div class="card-subtext">
-        <span>30s Forecast:</span>
-        <span class="forecast-pill num" id="sub-cpu">-- %</span>
+        <span>SLO Thresholds:</span>
+        <span class="forecast-pill num" id="sub-cpu" style="color:#f59e0b;">70% WARN / 85% CRIT</span>
       </div>
     </div>
 
@@ -748,8 +752,8 @@
   <div class="grid-charts">
     <div class="card">
       <div class="chart-header">
-        <span class="chart-title-text">CPU Utilization: Telemetry vs. 30s ML Forecast</span>
-        <span style="font-size:0.7rem;color:#f43f5e;font-weight:600;letter-spacing:0.04em;">── FORECAST ↗ LEADS BLUE BY 30s</span>
+        <span class="chart-title-text">Pool Utilization: 3s Smoothed vs. 70%/85% Thresholds & Scale Events</span>
+        <span style="font-size:0.7rem;color:#f59e0b;font-weight:600;letter-spacing:0.04em;">── 70% WARN | 85% CRITICAL</span>
       </div>
       <div class="chart-wrapper" style="position:relative;">
         <canvas id="chart-cpu"></canvas>
@@ -773,16 +777,16 @@
   <div class="grid-tables">
     <div class="card">
       <div class="table-header">
-        <span class="table-title-text">Proactive SLO Alert Stream (~25s Lead Time)</span>
+        <span class="table-title-text">Controller Alerts Stream (controller_events.csv)</span>
       </div>
       <table>
         <thead>
           <tr>
             <th>Time</th>
-            <th>Metric</th>
-            <th>Severity</th>
-            <th>30s Forecast</th>
-            <th>Lead Time</th>
+            <th>Type</th>
+            <th>Signal</th>
+            <th>Value</th>
+            <th>Reason</th>
           </tr>
         </thead>
         <tbody id="tbl-alerts">
@@ -793,16 +797,16 @@
 
     <div class="card">
       <div class="table-header">
-        <span class="table-title-text">Edge Resource Scaling Audit Log</span>
+        <span class="table-title-text">Controller Scaling Audit Log</span>
       </div>
       <table>
         <thead>
           <tr>
             <th>Time</th>
-            <th>Mode</th>
             <th>Action</th>
-            <th>Worker Shift</th>
-            <th>Approved By</th>
+            <th>Workers</th>
+            <th>Trigger Rule</th>
+            <th>Details</th>
           </tr>
         </thead>
         <tbody id="tbl-history">

@@ -1,0 +1,10 @@
+time,type,signal,value,reason
+2026-10-27T06:35:29.165407+00:00,SCALE_UP,active_workers,6,rule=forecast;from=2;to=6;util_before=0.0%;util_after=0.0%
+2026-10-27T06:35:30.195687+00:00,SCALE_UP,active_workers,6,rule=forecast;from=2;to=6;util_before=0.4%;util_after=0.2%
+2026-10-27T06:35:46.160694+00:00,SCALE_UP,active_workers,7,rule=forecast;from=6;to=7;util_before=9.2%;util_after=8.3%
+2026-10-27T06:35:47.167185+00:00,SCALE_UP,active_workers,8,rule=forecast;from=6;to=8;util_before=8.2%;util_after=4.7%
+2026-10-27T06:37:01.172393+00:00,WARN,pool_utilization,70.88,pool utilization crossed 70% warning threshold
+2026-10-27T06:37:04.171780+00:00,RECOVERY,pool_utilization,66.09,pool utilization recovered below 70% from WARN
+2026-10-27T06:37:21.173157+00:00,SCALE_DOWN,active_workers,7,rule=scale_down;from=8;to=7;util_before=6.4%;util_after=3.6%
+2026-10-27T06:37:22.170244+00:00,SCALE_UP,active_workers,8,rule=forecast;from=7;to=8;util_before=6.1%;util_after=3.1%
+2026-10-27T06:37:23.164211+00:00,SCALE_UP,active_workers,8,rule=forecast;from=7;to=8;util_before=4.0%;util_after=4.7%

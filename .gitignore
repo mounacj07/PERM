@@ -15,6 +15,8 @@ ENV/
 telemetry_log.csv
 telemetry_log.csv.bak
 phase_log.csv
+controller_events.csv
+controller_state.json
 
 # If you want to commit a specific "final" dataset snapshot for reproducibility,
 # rename it (e.g. telemetry_log_final.csv) and it won't be ignored by the rule above.

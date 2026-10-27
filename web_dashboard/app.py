@@ -15,6 +15,8 @@ Run:
 """
 
 import argparse
+import csv
+import json
 import logging
 import os
 import threading
@@ -29,6 +31,31 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 log = logging.getLogger("web_dashboard")
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CSV_EVENTS_PATH = os.path.join(PROJECT_ROOT, "controller_events.csv")
+STATE_JSON_PATH = os.path.join(PROJECT_ROOT, "controller_state.json")
+
+def _read_controller_events():
+    events = []
+    if os.path.exists(CSV_EVENTS_PATH):
+        try:
+            with open(CSV_EVENTS_PATH, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                for r in reader:
+                    events.append(r)
+        except Exception:
+            pass
+    return events
+
+def _read_controller_state():
+    if os.path.exists(STATE_JSON_PATH):
+        try:
+            with open(STATE_JSON_PATH, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
 
 # Defaults — overridable via CLI args (important for Docker deployments)
 _DEFAULT_COLLECTOR_URL    = "http://127.0.0.1:5000"
@@ -147,6 +174,19 @@ def create_app(service_urls: dict = None):
                 _cached_state["remediation"] = results["remediation"]
 
             snapshot = dict(_cached_state)
+
+        ctrl_events = _read_controller_events()
+        ctrl_state = _read_controller_state()
+        snapshot["controller_events"] = ctrl_events
+        snapshot["controller_state"] = ctrl_state
+
+        pool_util = ctrl_state.get("smoothed_util")
+        if pool_util is None and snapshot.get("telemetry_latest"):
+            telem = snapshot["telemetry_latest"]
+            worker_cpu = float(telem.get("worker_cpu_percent", 0.0))
+            workers = int(telem.get("active_workers", 2))
+            pool_util = round(min(100.0, max(0.0, (worker_cpu * 16.0) / max(1, workers))), 1)
+        snapshot["pool_utilization"] = pool_util if pool_util is not None else 0.0
 
         return jsonify(snapshot)
 
