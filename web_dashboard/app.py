@@ -170,6 +170,7 @@ def create_app(service_urls: dict = None):
             "alert_active":       f"{alert_url}/alerts/active",
             "alert_history":      f"{alert_url}/alerts/history?count=20",
             "remediation":        f"{remediation_url}/remediation/status",
+            "capacity":           f"{collector_url}/api/capacity",
         }
 
         results = {}
@@ -206,12 +207,23 @@ def create_app(service_urls: dict = None):
             if results.get("remediation"):
                 _cached_state["remediation"] = results["remediation"]
 
+            if results.get("capacity"):
+                _cached_state["capacity"] = results["capacity"]
+
             snapshot = dict(_cached_state)
 
         ctrl_events = _read_controller_events()
         ctrl_state = _read_controller_state()
         snapshot["controller_events"] = ctrl_events
         snapshot["controller_state"] = ctrl_state
+        snapshot["capacity"] = _cached_state.get("capacity", {})
+
+        # Mode label: 'PERM v0 (old model)' unless the final model is wired in live
+        if os.environ.get("PERM_FORECASTER", "").strip().lower() == "stagbdt":
+            model_mode_label = "ST-AGBDT (final model)"
+        else:
+            model_mode_label = "PERM v0 (old model)"
+        snapshot["model_mode_label"] = model_mode_label
 
         worker_cpu_active = 0.0
         whole_cpu = 0.0

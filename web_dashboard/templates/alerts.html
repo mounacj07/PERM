@@ -2,12 +2,239 @@
 {% block title %}PERM — Alerts & Scaling{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="chart-header">
-    <span class="chart-title-text">Alerts & Scaling Audit Stream</span>
+<!-- Top Mode Banner -->
+<div class="page-note" style="display:flex; justify-content:space-between; align-items:center;">
+  <div>
+    <span>🛡️</span>
+    <span>Model Status & Controller Mode:</span>
+    <strong class="mono" id="alerts-mode-label" style="color:var(--color-primary); font-size:0.95rem; margin-left:6px;">PERM v0 (old model)</strong>
   </div>
-  <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
-    Alerts module initializing...
+  <div style="font-size:0.8rem; color:var(--text-muted);">
+    Live capacity managed via bounded queue & core pinning
   </div>
 </div>
+
+<!-- Worker Count Timeline Chart -->
+<div class="grid-full">
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Worker Count Timeline (Cores Allocated over Time)</span>
+      <span style="font-size:0.75rem; color:var(--text-muted);">Min: 2 Workers, Max: 8 Workers</span>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="chart-worker-timeline"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- Tables Grid: Alerts & Scale Events -->
+<div class="grid-charts">
+  <!-- Alerts Stream Table -->
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Active & Recent Alerts Stream</span>
+      <span id="alerts-count-badge" class="status-badge status-badge-ok">0 Active</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Severity</th>
+          <th>Metric / Signal</th>
+          <th>Value</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-alerts-body">
+        <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: 1.5rem;">No active alerts recorded</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Scale Events List -->
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Scale Events Audit (Cold-Start Seconds)</span>
+      <span style="font-size:0.75rem; color:var(--color-purple); font-weight:700;">From /api/capacity</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Action</th>
+          <th>From → To</th>
+          <th>Cold-Start</th>
+          <th>Trigger Rule / Details</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-scale-events-body">
+        <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: 1.5rem;">No scale events logged yet</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let workerTimelineChart = null;
+
+function initTimelineChart() {
+  const ctx = document.getElementById('chart-worker-timeline').getContext('2d');
+  workerTimelineChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Active Worker Cores',
+          data: [],
+          borderColor: '#a855f7',
+          borderWidth: 2.5,
+          stepped: 'before',
+          pointRadius: 0,
+          fill: true,
+          backgroundColor: 'rgba(168, 85, 247, 0.08)'
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', maxTicksLimit: 12 } },
+        y: {
+          min: 1,
+          max: 9,
+          ticks: { stepSize: 1, color: '#64748b' },
+          grid: { color: 'rgba(255,255,255,0.04)' }
+        }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#cbd5e1', boxWidth: 12, usePointStyle: true } }
+      }
+    }
+  });
+}
+
+function onStateUpdate(data) {
+  const telem = data.telemetry_latest || {};
+  const history = data.telemetry_history || [];
+  const ctrlEvents = data.controller_events || [];
+  const capacity = data.capacity || {};
+  const capEvents = capacity.scale_events || [];
+
+  // Mode label
+  const modeLabel = data.model_mode_label || 'PERM v0 (old model)';
+  const elMode = document.getElementById('alerts-mode-label');
+  if (elMode) elMode.innerText = modeLabel;
+
+  // Worker Timeline Chart
+  if (history.length > 0) {
+    const labels = history.map(r => {
+      const d = new Date(r.timestamp);
+      return d.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+    });
+    const workersSeries = history.map(r => r.active_workers || 2);
+
+    workerTimelineChart.data.labels = labels;
+    workerTimelineChart.data.datasets[0].data = workersSeries;
+    workerTimelineChart.update('none');
+  }
+
+  // Alerts Table: combine controller_events and alert_history
+  const tblAlerts = document.getElementById('tbl-alerts-body');
+  let alertItems = [];
+
+  if (ctrlEvents.length > 0) {
+    alertItems = ctrlEvents.filter(e => ['WARN', 'CRITICAL', 'RECOVERY'].includes(e.type));
+  } else if (data.alerts_history && data.alerts_history.length > 0) {
+    alertItems = data.alerts_history.map(a => ({
+      time: a.timestamp,
+      type: a.severity,
+      signal: a.metric,
+      value: a.forecast_value_30s,
+      reason: `SLO breach in ~${a.lead_time_sec}s`
+    }));
+  }
+
+  if (alertItems.length === 0) {
+    tblAlerts.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No active alerts recorded</td></tr>`;
+    document.getElementById('alerts-count-badge').className = 'status-badge status-badge-ok';
+    document.getElementById('alerts-count-badge').innerText = '0 Active';
+  } else {
+    document.getElementById('alerts-count-badge').className = alertItems.some(a => a.type === 'CRITICAL')
+      ? 'status-badge status-badge-crit'
+      : 'status-badge status-badge-warn';
+    document.getElementById('alerts-count-badge').innerText = `${alertItems.length} Logged`;
+
+    tblAlerts.innerHTML = alertItems.slice(-8).reverse().map(a => {
+      const t = new Date(a.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+      const badge = a.type === 'CRITICAL'
+        ? '<span class="status-badge status-badge-crit">CRITICAL</span>'
+        : (a.type === 'WARN' || a.type === 'WARNING'
+            ? '<span class="status-badge status-badge-warn">WARN</span>'
+            : '<span class="status-badge status-badge-ok">RECOVERY</span>');
+      return `<tr>
+        <td class="mono">${t}</td>
+        <td>${badge}</td>
+        <td class="mono">${a.signal || 'pool_utilization'}</td>
+        <td class="mono" style="font-weight:600;">${a.value}${typeof a.value === 'number' || !isNaN(parseFloat(a.value)) ? '%' : ''}</td>
+        <td style="color:var(--text-main); font-size:0.75rem;">${a.reason || ''}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Scale Events List (from /api/capacity scale_events or controller_events)
+  const tblScale = document.getElementById('tbl-scale-events-body');
+  let scaleItems = [];
+
+  if (capEvents.length > 0) {
+    scaleItems = capEvents.map(e => ({
+      time: e.timestamp,
+      action: e.type.toUpperCase(),
+      from: e.from_workers,
+      to: e.to_workers,
+      cold_start: `${e.duration_seconds.toFixed(3)}s`,
+      details: `os_ready=${e.os_ready_seconds}s, delay=${e.provision_delay_sec}s`
+    }));
+  } else if (ctrlEvents.length > 0) {
+    scaleItems = ctrlEvents.filter(e => ['SCALE_UP', 'SCALE_DOWN'].includes(e.type)).map(e => {
+      const fromMatch = e.reason.match(/from=(\d+)/);
+      const fromW = fromMatch ? fromMatch[1] : '?';
+      return {
+        time: e.time,
+        action: e.type,
+        from: fromW,
+        to: e.value,
+        cold_start: '1.414s (est)',
+        details: e.reason
+      };
+    });
+  }
+
+  if (scaleItems.length === 0) {
+    tblScale.innerHTML = `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem;">No scale events logged yet</td></tr>`;
+  } else {
+    tblScale.innerHTML = scaleItems.slice(-8).reverse().map(e => {
+      const t = new Date(e.time).toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+      const badge = e.action === 'SCALE_UP'
+        ? '<span class="status-badge status-badge-ok">SCALE_UP</span>'
+        : '<span class="status-badge status-badge-warn">SCALE_DOWN</span>';
+      return `<tr>
+        <td class="mono">${t}</td>
+        <td>${badge}</td>
+        <td class="mono" style="font-weight:700;">${e.from} → ${e.to} workers</td>
+        <td class="mono" style="color:var(--color-primary); font-weight:700;">${e.cold_start}</td>
+        <td style="color:var(--text-muted); font-size:0.75rem;">${e.details}</td>
+      </tr>`;
+    }).join('');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTimelineChart();
+});
+</script>
 {% endblock %}
