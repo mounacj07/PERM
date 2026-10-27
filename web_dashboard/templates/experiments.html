@@ -2,12 +2,304 @@
 {% block title %}PERM — Scenario Launcher{% endblock %}
 
 {% block content %}
-<div class="card">
+<div class="card" style="margin-bottom: 1.5rem;">
   <div class="chart-header">
     <span class="chart-title-text">Workload Scenario Launcher</span>
+    <span id="launcherStatusBadge" class="badge badge-normal" style="font-size: 0.85rem; padding: 0.35rem 0.8rem;">
+      STATUS: IDLE
+    </span>
   </div>
-  <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
-    Scenario launcher initializing...
+  <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+    Trigger open-loop synthetic load profiles via headless Locust. Dispatches seeded Poisson-scheduled requests directly against the testbed. Only one run can be active at a time.
+  </p>
+
+  <!-- Live Run Monitor Box -->
+  <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-top: 1rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Active Run</div>
+        <div style="font-size: 1.25rem; font-weight: 700; color: #f8fafc;" id="activeProfileText">None (Idle)</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);" id="activeDetailsText">Ready for launch</div>
+      </div>
+      <div style="text-align: right;">
+        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);">Elapsed / Target</div>
+        <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-cyan);" id="activeTimerText">0.0s / 125s</div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);" id="activePidText">PID: —</div>
+      </div>
+      <div>
+        <button id="btnStopRun" class="btn btn-danger" style="padding: 0.6rem 1.4rem; font-weight: 600;" disabled onclick="stopCurrentRun()">
+          ■ Stop Run
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; margin-top: 1rem; overflow: hidden;">
+      <div id="runProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-blue)); transition: width 0.5s ease;"></div>
+    </div>
+  </div>
+
+  <!-- Global Parameter Configuration -->
+  <div style="display: flex; gap: 1.5rem; margin-top: 1.5rem; flex-wrap: wrap; align-items: flex-end;">
+    <div style="min-width: 160px;">
+      <label style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.35rem;">Random Seed</label>
+      <input type="number" id="inputSeed" value="44" style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: #f8fafc; padding: 0.5rem 0.75rem; border-radius: 6px; width: 100%; font-size: 0.9rem;" />
+    </div>
+    <div style="min-width: 160px;">
+      <label style="display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.35rem;">Duration (seconds)</label>
+      <input type="number" id="inputDuration" value="125" style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border-color); color: #f8fafc; padding: 0.5rem 0.75rem; border-radius: 6px; width: 100%; font-size: 0.9rem;" />
+    </div>
+    <div style="flex: 1; text-align: right;">
+      <div id="actionFeedback" style="font-size: 0.85rem; color: var(--accent-cyan); display: none;"></div>
+    </div>
   </div>
 </div>
+
+<!-- Profile Selection Cards Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.25rem;">
+
+  <!-- Step -->
+  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Step Profile</span>
+        <span class="badge" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-cyan);">Instant Jump</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+        Abrupt step from baseline (~12 req/s) to high peak (~45 req/s) at t=35s. Tests reactive and predictive controller lag.
+      </p>
+    </div>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('step')">
+        ▶ Launch Step
+      </button>
+    </div>
+  </div>
+
+  <!-- Ramp -->
+  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Ramp Profile</span>
+        <span class="badge" style="background: rgba(168, 85, 247, 0.15); color: #c084fc;">Smooth Growth</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+        Smooth linear demand increase over 60 seconds. Tests proactive proportional worker scaling without overshooting.
+      </p>
+    </div>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('ramp')">
+        ▶ Launch Ramp
+      </button>
+    </div>
+  </div>
+
+  <!-- Spike -->
+  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Spike Profile</span>
+        <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: var(--accent-danger);">Impulse</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+        Narrow, high-amplitude impulse demand lasting 15 seconds before returning to baseline. Evaluates rapid scale-up and scale-down hysteresis.
+      </p>
+    </div>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('spike')">
+        ▶ Launch Spike
+      </button>
+    </div>
+  </div>
+
+  <!-- Double Burst -->
+  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Double Burst</span>
+        <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-warn);">Dual Peaks</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+        Two successive burst spikes separated by a brief lull. Tests whether scaling responds cleanly to secondary bursts during cool-down.
+      </p>
+    </div>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('double_burst')">
+        ▶ Launch Double Burst
+      </button>
+    </div>
+  </div>
+
+  <!-- Random Walk -->
+  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Random Walk</span>
+        <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: var(--accent-blue);">Stochastic</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+        Continuous Brownian drift rate simulating unpredictable edge internet traffic variations. Evaluates continuous tracking error.
+      </p>
+    </div>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('random_walk')">
+        ▶ Launch Random Walk
+      </button>
+    </div>
+  </div>
+
+  <!-- Random Mix -->
+  <div class="card" style="display: flex; flex-direction: column; justify-content: space-between;">
+    <div>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+        <span style="font-weight: 700; font-size: 1.1rem; color: #f8fafc;">Random Mix</span>
+        <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399);">Compound</span>
+      </div>
+      <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+        Multi-phase compound workload combining steps, ramps, and Poisson bursts. Used in final model calibration and test evaluation.
+      </p>
+    </div>
+    <div style="margin-top: 1.25rem;">
+      <button class="btn btn-primary launcher-btn" style="width: 100%;" onclick="launchProfile('random_mix')">
+        ▶ Launch Random Mix
+      </button>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let pollInterval = null;
+
+function showFeedback(msg, isError) {
+  const el = document.getElementById('actionFeedback');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? 'var(--accent-danger)' : 'var(--accent-cyan)';
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+function updateLauncherUI(data) {
+  const badge = document.getElementById('launcherStatusBadge');
+  const profText = document.getElementById('activeProfileText');
+  const detText = document.getElementById('activeDetailsText');
+  const timerText = document.getElementById('activeTimerText');
+  const pidText = document.getElementById('activePidText');
+  const stopBtn = document.getElementById('btnStopRun');
+  const pBar = document.getElementById('runProgressBar');
+  const launchBtns = document.querySelectorAll('.launcher-btn');
+
+  const status = (data.status || 'idle').toLowerCase();
+
+  // Update badge
+  if (status === 'running') {
+    badge.className = 'badge badge-warn';
+    badge.textContent = 'STATUS: RUNNING';
+    stopBtn.disabled = false;
+    launchBtns.forEach(b => b.disabled = true);
+  } else if (status === 'finished') {
+    badge.className = 'badge badge-normal';
+    badge.textContent = 'STATUS: FINISHED';
+    stopBtn.disabled = true;
+    launchBtns.forEach(b => b.disabled = false);
+  } else if (status === 'stopped') {
+    badge.className = 'badge badge-critical';
+    badge.textContent = 'STATUS: STOPPED';
+    stopBtn.disabled = true;
+    launchBtns.forEach(b => b.disabled = false);
+  } else {
+    badge.className = 'badge badge-normal';
+    badge.textContent = 'STATUS: IDLE';
+    stopBtn.disabled = true;
+    launchBtns.forEach(b => b.disabled = false);
+  }
+
+  // Active details
+  if (data.profile) {
+    profText.textContent = data.profile.toUpperCase() + ' (Seed ' + data.seed + ')';
+  } else {
+    profText.textContent = 'None (Idle)';
+  }
+
+  const duration = data.duration_sec || 125;
+  const elapsed = data.elapsed_sec !== null && data.elapsed_sec !== undefined ? data.elapsed_sec : 0;
+
+  if (status === 'running') {
+    detText.textContent = 'Headless Locust actively generating Poisson requests...';
+    timerText.textContent = elapsed.toFixed(1) + 's / ' + duration + 's';
+    pidText.textContent = 'PID: ' + (data.pid || '—');
+    const pct = Math.min(100, Math.max(0, (elapsed / duration) * 100));
+    pBar.style.width = pct + '%';
+  } else if (status === 'finished') {
+    detText.textContent = 'Completed profile duration (' + duration + 's). Returncode: ' + (data.returncode !== null ? data.returncode : 0);
+    timerText.textContent = (elapsed || duration).toFixed(1) + 's / ' + duration + 's';
+    pidText.textContent = 'Completed';
+    pBar.style.width = '100%';
+  } else if (status === 'stopped') {
+    detText.textContent = 'Run manually stopped by operator at ' + elapsed.toFixed(1) + 's.';
+    timerText.textContent = elapsed.toFixed(1) + 's / ' + duration + 's';
+    pidText.textContent = 'Stopped';
+  } else {
+    detText.textContent = 'Ready for launch';
+    timerText.textContent = '0.0s / ' + duration + 's';
+    pidText.textContent = 'PID: —';
+    pBar.style.width = '0%';
+  }
+}
+
+function pollLauncherStatus() {
+  fetch('/api/launcher/status')
+    .then(r => r.json())
+    .then(data => {
+      updateLauncherUI(data);
+    })
+    .catch(err => {
+      console.warn('Failed to poll launcher status:', err);
+    });
+}
+
+function launchProfile(profile) {
+  const seed = parseInt(document.getElementById('inputSeed').value, 10) || 44;
+  const duration = parseInt(document.getElementById('inputDuration').value, 10) || 125;
+
+  fetch('/api/launcher/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile: profile, seed: seed, duration: duration })
+  })
+  .then(async r => {
+    const data = await r.json();
+    if (!r.ok) {
+      showFeedback(data.error || 'Failed to start scenario', true);
+      pollLauncherStatus();
+    } else {
+      showFeedback('Launched ' + profile + ' (seed ' + seed + ')', false);
+      pollLauncherStatus();
+    }
+  })
+  .catch(err => {
+    showFeedback('Network error: ' + err, true);
+  });
+}
+
+function stopCurrentRun() {
+  fetch('/api/launcher/stop', { method: 'POST' })
+    .then(r => r.json())
+    .then(data => {
+      showFeedback(data.message || 'Run stopped', false);
+      pollLauncherStatus();
+    })
+    .catch(err => {
+      showFeedback('Failed to stop run: ' + err, true);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  pollLauncherStatus();
+  pollInterval = setInterval(pollLauncherStatus, 1000);
+});
+</script>
 {% endblock %}

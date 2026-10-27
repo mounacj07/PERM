@@ -19,7 +19,10 @@ import csv
 import json
 import logging
 import os
+import subprocess
+import sys
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
@@ -378,6 +381,176 @@ def create_app(service_urls: dict = None):
             return jsonify(r.json()), r.status_code
         except Exception as e:
             return jsonify({"error": str(e)}), 500
+
+    # ------------------------------------------------------------------
+    # P5. Scenario launcher backend
+    # ------------------------------------------------------------------
+    valid_profiles = ["step", "ramp", "spike", "double_burst", "random_walk", "random_mix"]
+    launcher_state = {
+        "process": None,
+        "profile": None,
+        "seed": 44,
+        "duration_sec": 125,
+        "start_time": None,
+        "status": "idle",
+        "returncode": None,
+        "pid": None,
+        "last_elapsed": None,
+    }
+    launcher_lock = threading.Lock()
+
+    def _update_launcher_status():
+        with launcher_lock:
+            proc = launcher_state["process"]
+            if proc is not None:
+                ret = proc.poll()
+                if ret is None:
+                    launcher_state["status"] = "running"
+                else:
+                    launcher_state["returncode"] = ret
+                    if launcher_state["status"] == "running":
+                        launcher_state["status"] = "finished" if ret == 0 else "failed"
+                    if launcher_state["start_time"]:
+                        launcher_state["last_elapsed"] = round(time.time() - launcher_state["start_time"], 1)
+                    launcher_state["process"] = None
+
+    @app.route("/api/launcher/status", methods=["GET"])
+    def launcher_status():
+        _update_launcher_status()
+        with launcher_lock:
+            elapsed = None
+            if launcher_state["start_time"] is not None:
+                if launcher_state["status"] == "running":
+                    elapsed = round(time.time() - launcher_state["start_time"], 1)
+                else:
+                    elapsed = launcher_state.get("last_elapsed", None)
+            return jsonify({
+                "status": launcher_state["status"],
+                "profile": launcher_state["profile"],
+                "seed": launcher_state["seed"],
+                "duration_sec": launcher_state["duration_sec"],
+                "elapsed_sec": elapsed,
+                "returncode": launcher_state["returncode"],
+                "pid": launcher_state["pid"] if launcher_state["status"] == "running" else None,
+                "valid_profiles": valid_profiles,
+            })
+
+    @app.route("/api/launcher/start", methods=["POST"])
+    def launcher_start():
+        _update_launcher_status()
+        with launcher_lock:
+            if launcher_state["process"] is not None and launcher_state["process"].poll() is None:
+                return jsonify({
+                    "error": "A run is already active. Refusing to start another run.",
+                    "status": "running",
+                    "profile": launcher_state["profile"],
+                    "pid": launcher_state["pid"],
+                }), 409
+
+            data = request.get_json(silent=True) or {}
+            profile = str(data.get("profile", "")).strip().lower()
+            if profile not in valid_profiles:
+                return jsonify({
+                    "error": f"Invalid profile '{profile}'. Allowed profiles: {valid_profiles}",
+                }), 400
+
+            try:
+                seed = int(data.get("seed", 44))
+            except (ValueError, TypeError):
+                seed = 44
+
+            try:
+                duration = int(data.get("duration", 125))
+                if duration <= 0:
+                    duration = 125
+            except (ValueError, TypeError):
+                duration = 125
+
+            target_host = str(data.get("host", collector_url)).strip() or collector_url
+
+            loc_env = os.environ.copy()
+            loc_env["PERM_PROFILE"] = profile
+            loc_env["PERM_SEED"] = str(seed)
+
+            cmd = [
+                sys.executable,
+                "-m",
+                "locust",
+                "-f",
+                os.path.join(PROJECT_ROOT, "locustfile_perm.py"),
+                "--headless",
+                "-u",
+                "1",
+                "-r",
+                "1",
+                "-t",
+                f"{duration}s",
+                "--host",
+                target_host,
+            ]
+
+            try:
+                proc = subprocess.Popen(
+                    cmd,
+                    cwd=PROJECT_ROOT,
+                    env=loc_env,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                launcher_state["process"] = proc
+                launcher_state["profile"] = profile
+                launcher_state["seed"] = seed
+                launcher_state["duration_sec"] = duration
+                launcher_state["start_time"] = time.time()
+                launcher_state["status"] = "running"
+                launcher_state["returncode"] = None
+                launcher_state["pid"] = proc.pid
+                launcher_state["last_elapsed"] = None
+                log.info("Launcher started Locust for profile=%s seed=%d (PID %d)", profile, seed, proc.pid)
+                return jsonify({
+                    "status": "running",
+                    "profile": profile,
+                    "seed": seed,
+                    "duration_sec": duration,
+                    "pid": proc.pid,
+                    "message": f"Successfully launched scenario '{profile}'",
+                })
+            except Exception as e:
+                log.error("Failed to spawn locust: %s", e)
+                return jsonify({"error": f"Failed to spawn locust process: {e}"}), 500
+
+    @app.route("/api/launcher/stop", methods=["POST"])
+    def launcher_stop():
+        with launcher_lock:
+            proc = launcher_state["process"]
+            if proc is not None and proc.poll() is None:
+                try:
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=2.0)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        proc.wait(timeout=1.0)
+                except Exception as e:
+                    log.warning("Error stopping process %s: %s", launcher_state.get("pid"), e)
+
+                if launcher_state["start_time"]:
+                    launcher_state["last_elapsed"] = round(time.time() - launcher_state["start_time"], 1)
+                launcher_state["status"] = "stopped"
+                launcher_state["returncode"] = proc.poll()
+                launcher_state["process"] = None
+                log.info("Launcher stopped scenario %s", launcher_state.get("profile"))
+                return jsonify({
+                    "status": "stopped",
+                    "profile": launcher_state["profile"],
+                    "message": "Scenario run stopped successfully",
+                })
+            else:
+                return jsonify({
+                    "status": launcher_state["status"],
+                    "profile": launcher_state["profile"],
+                    "message": "No active scenario run to stop",
+                })
 
     return app
 
