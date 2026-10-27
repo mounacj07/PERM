@@ -1,25 +1,28 @@
 """
 PERM - run_demo_runs.py
 =======================
-Automated runner for D3 Demo Runs (Step Profile, Seed 44, 2 initial workers).
-Runs one at a time, alone:
-  Run 1: --mode reactive
-  Run 2: --mode predictive
+Automated runner for Demo Controller Evaluation Runs:
+Runs step (seed 44) and ramp (seed 44) for:
+  1. reactive
+  2. capacity_aware
+  3. predictive
+(6 runs total, starting at 2 workers).
 
 Metrics collected per run:
-  1. Peak pool utilization (%)
-  2. Seconds above 70%
-  3. Time from burst start to first scale-up (s)
-  4. Workers over time (timeline / intervals)
-  5. Final pool utilization (%)
-  6. Failed requests (count)
-  7. Worker-seconds (integrated active workers over time)
+  1. First scale-up time relative to burst/ramp start (negative = before)
+  2. Workers during the first 25s (should be 2)
+  3. Workers timeline
+  4. Failed requests
+  5. Worker-seconds
+  6. Peak pool utilization (%)
+  7. Seconds above 70%
 
 All data is strictly real measured telemetry from the live testbed runs.
 """
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import logging
@@ -77,9 +80,10 @@ def terminate_proc(proc: Optional[subprocess.Popen], name: str = "proc") -> None
                 pass
 
 
-def run_single_demo(mode: str) -> Dict[str, Any]:
+def run_single_demo(mode: str, profile: str = "step", seed: int = 44) -> Dict[str, Any]:
+    run_key = f"{mode}_{profile}"
     log.info("=" * 70)
-    log.info("STARTING DEMO RUN: MODE = %s (Step Profile, Seed 44, Initial 2 Workers)", mode.upper())
+    log.info("STARTING DEMO RUN: MODE = %s | PROFILE = %s | SEED = %d", mode.upper(), profile.upper(), seed)
     log.info("=" * 70)
 
     collector_proc = None
@@ -87,13 +91,19 @@ def run_single_demo(mode: str) -> Dict[str, Any]:
     controller_proc = None
     locust_proc = None
 
-    run_events_csv = os.path.join(RESULTS_DIR, f"controller_events_{mode}.csv")
+    run_events_csv = os.path.join(RESULTS_DIR, f"controller_events_{run_key}.csv")
     if os.path.exists(run_events_csv):
         os.remove(run_events_csv)
 
-    locust_csv_prefix = os.path.join(RESULTS_DIR, f"locust_demo_{mode}")
+    locust_csv_prefix = os.path.join(RESULTS_DIR, f"locust_demo_{run_key}")
 
     telemetry_timeline: List[Dict[str, Any]] = []
+
+    # Profile timing parameters
+    # step: 30s calm, 60s burst, 30s calm -> 120s total, run locust 125s
+    # ramp: 30s calm, 30s ramp, 45s hold, 30s calm -> 135s total, run locust 140s
+    locust_duration = 125 if profile == "step" else 140
+    controller_duration = locust_duration + 15
 
     try:
         # 1. Start Telemetry Collector
@@ -146,17 +156,17 @@ def run_single_demo(mode: str) -> Dict[str, Any]:
                 "--csv",
                 run_events_csv,
                 "--duration",
-                "140",
+                str(controller_duration),
             ],
             cwd=PROJECT_ROOT,
         )
         time.sleep(2.0)  # Controller stabilization
 
-        # 4. Start Locust Step Profile with Seed 44
-        log.info("Launching Locust step profile (seed 44, duration 125s)...")
+        # 4. Start Locust Profile with Seed 44
+        log.info("Launching Locust %s profile (seed %d, duration %ds)...", profile, seed, locust_duration)
         loc_env = os.environ.copy()
-        loc_env["PERM_PROFILE"] = "step"
-        loc_env["PERM_SEED"] = "44"
+        loc_env["PERM_PROFILE"] = profile
+        loc_env["PERM_SEED"] = str(seed)
 
         locust_cmd = [
             sys.executable,
@@ -170,7 +180,7 @@ def run_single_demo(mode: str) -> Dict[str, Any]:
             "-r",
             "1",
             "-t",
-            "125s",
+            f"{locust_duration}s",
             "--host",
             COLLECTOR_URL,
             "--csv",
@@ -180,7 +190,7 @@ def run_single_demo(mode: str) -> Dict[str, Any]:
         t_locust_start = time.monotonic()
         locust_proc = subprocess.Popen(locust_cmd, cwd=PROJECT_ROOT, env=loc_env)
 
-        # Burst start is exactly offset 30.0s after Locust start
+        # Burst/ramp start is exactly offset 30.0s after Locust starts
         burst_start_time = t_locust_start + 30.0
         first_scale_up_time: Optional[float] = None
         first_scale_up_target: Optional[int] = None
@@ -219,15 +229,16 @@ def run_single_demo(mode: str) -> Dict[str, Any]:
                     }
                     telemetry_timeline.append(sample)
 
-                    # Detect first scale-up
+                    # Detect first scale-up (workers > 2)
                     if workers > 2 and first_scale_up_time is None:
                         first_scale_up_time = t_now
                         first_scale_up_target = workers
+                        rel_time = round(t_now - burst_start_time, 2)
                         log.info(
-                            "FIRST SCALE-UP DETECTED: 2 -> %d workers at elapsed=%.2fs (t - burst_start = %.2fs)",
+                            "FIRST SCALE-UP DETECTED: 2 -> %d workers at elapsed=%.2fs (rel to burst start = %.2fs)",
                             workers,
                             elapsed_from_start,
-                            t_now - burst_start_time,
+                            rel_time,
                         )
 
             except Exception:
@@ -243,19 +254,25 @@ def run_single_demo(mode: str) -> Dict[str, Any]:
         terminate_proc(controller_proc, "DemoController")
         terminate_proc(inference_proc, "InferenceService")
         terminate_proc(collector_proc, "TelemetryCollector")
-        time.sleep(4.0)  # Wait for sockets to close
+        time.sleep(5.0)  # Wait for sockets to close
 
     # 5. Compute Run Metrics from Real Telemetry
     if not telemetry_timeline:
-        raise RuntimeError("No telemetry was collected during demo run!")
+        raise RuntimeError(f"No telemetry was collected during demo run {run_key}!")
 
     peak_pool_util = max(s["smoothed_pool_util"] for s in telemetry_timeline)
     seconds_above_70 = sum(1 for s in telemetry_timeline if s["smoothed_pool_util"] > 70.0)
 
+    # First scale-up relative to burst/ramp start: negative = before, positive = after
     if first_scale_up_time is not None:
-        time_to_first_scale = round(max(0.0, first_scale_up_time - burst_start_time), 2)
+        rel_scale_time = round(first_scale_up_time - burst_start_time, 2)
     else:
-        time_to_first_scale = None
+        rel_scale_time = None
+
+    # Check workers during the first 25 seconds
+    workers_25s = [s["workers"] for s in telemetry_timeline if s["elapsed_sec"] <= 25.0]
+    unique_workers_25s = sorted(list(set(workers_25s))) if workers_25s else [2]
+    workers_first_25s_str = ", ".join(map(str, unique_workers_25s)) if len(unique_workers_25s) > 1 else str(unique_workers_25s[0])
 
     final_util = telemetry_timeline[-1]["smoothed_pool_util"]
     total_failures = telemetry_timeline[-1]["error_count"]
@@ -316,95 +333,119 @@ def run_single_demo(mode: str) -> Dict[str, Any]:
 
     run_summary = {
         "mode": mode,
-        "profile": "step",
-        "seed": 44,
-        "initial_workers": 2,
+        "profile": profile,
+        "seed": seed,
+        "burst_start_sec": 30.0,
+        "first_scale_up_rel_sec": rel_scale_time,
+        "first_scale_up_target": first_scale_up_target,
+        "workers_first_25s": workers_first_25s_str,
         "peak_pool_utilization_pct": round(peak_pool_util, 2),
         "seconds_above_70": seconds_above_70,
-        "time_to_first_scale_sec": time_to_first_scale,
-        "first_scale_up_target": first_scale_up_target,
-        "workers_over_time": worker_transitions,
         "final_utilization_pct": round(final_util, 2),
         "failed_requests": max(total_failures, locust_failures),
         "locust_requests": locust_requests,
         "locust_failures": locust_failures,
         "worker_seconds": worker_seconds,
         "num_telemetry_samples": len(telemetry_timeline),
+        "workers_over_time": worker_transitions,
         "controller_events": events_from_csv,
     }
 
     # Save summary and timeline
-    summary_path = os.path.join(RESULTS_DIR, f"demo_run_{mode}.json")
+    summary_path = os.path.join(RESULTS_DIR, f"demo_run_{run_key}.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(run_summary, f, indent=2)
 
-    timeline_path = os.path.join(RESULTS_DIR, f"telemetry_timeline_{mode}.json")
+    timeline_path = os.path.join(RESULTS_DIR, f"telemetry_timeline_{run_key}.json")
     with open(timeline_path, "w", encoding="utf-8") as f:
         json.dump(telemetry_timeline, f, indent=2)
 
-    log.info("Finished demo run [%s]. Summary saved to %s", mode, summary_path)
+    log.info("Finished demo run [%s]. Summary saved to %s", run_key, summary_path)
     return run_summary
 
 
+def format_timeline(transitions: List[Dict[str, Any]]) -> str:
+    parts = []
+    for t in transitions:
+        parts.append(f"{t['start_sec']}s-{t['end_sec']}s: {t['workers']}w ({t['duration_sec']}s)")
+    return " -> ".join(parts)
+
+
 def main():
-    import argparse
-    parser = argparse.ArgumentParser(description="Run D3 Demo Runs")
+    parser = argparse.ArgumentParser(description="Run PERM Demo Controller Honest Runs")
     parser.add_argument(
         "--mode",
-        choices=["both", "reactive", "predictive"],
+        choices=["all", "reactive", "capacity_aware", "predictive"],
+        default="all",
+        help="Controller mode to run: all, reactive, capacity_aware, predictive",
+    )
+    parser.add_argument(
+        "--profile",
+        choices=["both", "step", "ramp"],
         default="both",
-        help="Which demo runs to execute: 'both', 'reactive', or 'predictive'",
+        help="Profile to run: both, step, ramp",
     )
     args = parser.parse_args()
 
-    log.info("Starting PERM D3 Demo Runs execution (target: %s)...", args.mode)
-    results = {}
+    modes = ["reactive", "capacity_aware", "predictive"] if args.mode == "all" else [args.mode]
+    profiles = ["step", "ramp"] if args.profile == "both" else [args.profile]
 
-    reactive_summary_path = os.path.join(RESULTS_DIR, "demo_run_reactive.json")
-    predictive_summary_path = os.path.join(RESULTS_DIR, "demo_run_predictive.json")
+    results: Dict[str, Any] = {}
+    comparison_file = os.path.join(RESULTS_DIR, "demo_runs_comparison_all6.json")
 
-    # Run Reactive
-    if args.mode in ("both", "reactive"):
-        results["reactive"] = run_single_demo("reactive")
-    elif os.path.exists(reactive_summary_path):
-        with open(reactive_summary_path, "r", encoding="utf-8") as f:
-            results["reactive"] = json.load(f)
+    # Load existing if available
+    if os.path.exists(comparison_file):
+        try:
+            with open(comparison_file, "r", encoding="utf-8") as f:
+                results = json.load(f)
+        except Exception:
+            results = {}
 
-    if args.mode == "both":
-        log.info("Pausing 10s between demo runs to allow cooling and socket recycling...")
-        time.sleep(10.0)
+    run_list = []
+    for prof in profiles:
+        for m in modes:
+            run_list.append((m, prof))
 
-    # Run Predictive
-    if args.mode in ("both", "predictive"):
-        results["predictive"] = run_single_demo("predictive")
-    elif os.path.exists(predictive_summary_path):
-        with open(predictive_summary_path, "r", encoding="utf-8") as f:
-            results["predictive"] = json.load(f)
+    log.info("Execution Plan: %d runs scheduled: %s", len(run_list), run_list)
 
-    combined_summary_path = os.path.join(RESULTS_DIR, "demo_runs_comparison.json")
-    with open(combined_summary_path, "w", encoding="utf-8") as f:
-        json.dump(results, f, indent=2)
+    for idx, (m, prof) in enumerate(run_list):
+        run_key = f"{m}_{prof}"
+        log.info("\n>>> STARTING RUN %d/%d: %s <<<", idx + 1, len(run_list), run_key)
+        res = run_single_demo(mode=m, profile=prof, seed=44)
+        results[run_key] = res
 
-    # Print comparative table
-    print("\n" + "=" * 80)
-    print("PERM DEMO RUNS COMPARISON (Step Profile, Seed 44, 2 Initial Workers)")
-    print("NOTE: These are two illustrative demonstration runs, not experimental results.")
-    print("=" * 80)
-    print(f"{'Metric':<40} | {'Reactive':<16} | {'Predictive':<16}")
-    print("-" * 80)
-    r = results["reactive"]
-    p = results["predictive"]
+        # Save cumulative results
+        with open(comparison_file, "w", encoding="utf-8") as f:
+            json.dump(results, f, indent=2)
 
-    print(f"{'Peak Pool Utilization (%)':<40} | {r['peak_pool_utilization_pct']:<16.1f} | {p['peak_pool_utilization_pct']:<16.1f}")
-    print(f"{'Seconds Above 70%':<40} | {r['seconds_above_70']:<16d} | {p['seconds_above_70']:<16d}")
-    print(f"{'Time from Burst Start to 1st Scale (s)':<40} | {str(r['time_to_first_scale_sec']) + 's':<16} | {str(p['time_to_first_scale_sec']) + 's':<16}")
-    print(f"{'Final Utilization (%)':<40} | {r['final_utilization_pct']:<16.1f} | {p['final_utilization_pct']:<16.1f}")
-    print(f"{'Failed Requests':<40} | {r['failed_requests']:<16d} | {p['failed_requests']:<16d}")
-    print(f"{'Worker-Seconds':<40} | {r['worker_seconds']:<16.1f} | {p['worker_seconds']:<16.1f}")
-    print("-" * 80)
-    print(f"Reactive Workers Timeline:   {r['workers_over_time']}")
-    print(f"Predictive Workers Timeline: {p['workers_over_time']}")
-    print("=" * 80 + "\n")
+        if idx < len(run_list) - 1:
+            log.info("Pausing 10s between runs for socket closure and cooling...")
+            time.sleep(10.0)
+
+    # Print summary table
+    print("\n" + "=" * 110)
+    print("PERM DEMO CONTROLLER EVALUATION RESULTS (Seed 44, Initial 2 Workers)")
+    print("NOTE: These are illustrative single runs, not multi-seed experimental results.")
+    print("=" * 110)
+    print(f"{'Run':<24} | {'1st Scale Rel Burst':<20} | {'W @ <=25s':<10} | {'Peak Util':<10} | {'Sec >70%':<10} | {'Failures':<9} | {'Worker-s':<9}")
+    print("-" * 110)
+
+    for run_key, r in results.items():
+        rel_scale = f"{r.get('first_scale_up_rel_sec', 'N/A')}s"
+        w_25s = str(r.get("workers_first_25s", "N/A"))
+        peak_u = f"{r.get('peak_pool_utilization_pct', 0.0):.1f}%"
+        sec_70 = str(r.get("seconds_above_70", 0))
+        fails = str(r.get("failed_requests", 0))
+        w_s = f"{r.get('worker_seconds', 0.0):.1f}"
+        print(f"{run_key:<24} | {rel_scale:<20} | {w_25s:<10} | {peak_u:<10} | {sec_70:<10} | {fails:<9} | {w_s:<9}")
+
+    print("=" * 110 + "\n")
+
+    # Detailed timelines
+    print("DETAILED WORKER TIMELINES:")
+    for run_key, r in results.items():
+        print(f"[{run_key}]")
+        print(f"  Timeline: {format_timeline(r.get('workers_over_time', []))}")
 
 
 if __name__ == "__main__":

@@ -2,11 +2,11 @@
 
 ## 1. Executive Summary
 
-This deliverable implements the standalone opt-in **Demo Controller** (`demo_controller.py`) for PERM, providing both **reactive** and **predictive** edge resource scaling over a 1-second control loop without altering existing production services (`alert_engine.py`, `remediation_service.py`, worker caps, core pinning, or model code).
+This deliverable implements the standalone opt-in **Demo Controller** (`demo_controller.py`) for PERM, providing **reactive**, **capacity_aware**, and **predictive** edge resource scaling over a 1-second control loop without altering existing production services (`alert_engine.py`, `remediation_service.py`, worker caps, core pinning, or model code).
 
-All constants (`service_time = 0.126s`, `capacity_per_worker = 7.89 req/s`, `logical_cpus = 16`) are loaded directly from `testbed_calibration.json`. All reported metrics come exclusively from real physical measurements gathered during live Locust step-profile runs (seed 44) on the active testbed.
+All constants (`service_time = 0.126s`, `capacity_per_worker = 7.89 req/s`, `logical_cpus = 16`) are loaded directly from `testbed_calibration.json`. All reported metrics come exclusively from real physical measurements gathered during live Locust runs (seed 44) on the active testbed.
 
-> **Important Notice on Methodology**: The two runs reported below are **two illustrative demonstration runs, not experimental results**. A single run per mode does not provide statistical confidence intervals or generalize across workloads; experimental claims require multi-seed replication across diverse profiles.
+> **Important Notice on Methodology**: The runs reported below are **illustrative single runs, not experimental results**. Single runs on isolated profiles do not provide statistical confidence intervals or generalize across workloads; experimental claims require multi-seed replication across diverse profiles.
 
 ---
 
@@ -21,39 +21,45 @@ All constants (`service_time = 0.126s`, `capacity_per_worker = 7.89 req/s`, `log
   - `WARN`: logged when smoothed pool utilization crosses $\ge 70\%$.
   - `CRITICAL`: logged when smoothed pool utilization crosses $\ge 85\%$.
   - `RECOVERY`: logged when smoothed pool utilization drops back $< 70\%$.
-- **Scaling Decision Engine**:
-  $$\text{Target} = \max(\text{reactive\_target}, \text{predictive\_target})$$
-  - `reactive_target = ceil(smoothed_arrivals * service_time / 0.7)`, applied when pool utilization $> 70\%$ or queue depth $\ge 5$. If pool utilization $> 85\%$ for $\ge 2\text{s}$, a safety boost of $+2$ workers is added.
-  - `predictive_target = ceil(forecast_upper_bound / (capacity_per_worker * 0.7))` queried from `/forecast/demand?horizon=20` (enabled via `PERM_FORECASTER=stagbdt`) with the last 60 seconds of arrivals. If the forecast service is unreachable, it logs `"forecast offline"` and falls back to reactive scaling.
-  - **Constraints**: Targets are strictly clipped to $[2, 8]$ workers. Scale-up is triggered immediately via `POST /api/capacity {"active_workers": n}`. Scale-down triggers only after the target remains below the current worker count continuously for $\ge 15\text{s}$ (hysteresis).
-  - Every scale event records the triggering rule (`forecast`, `reactive`, `safety`, or `scale_down`) along with pool utilization before and after.
+- **Modes Supported**:
+  1. `reactive`:
+     - `reactive_target = ceil(smoothed_arrivals * service_time / 0.7)`, applied when pool utilization $> 70\%$ or queue depth $\ge 5$.
+     - If pool utilization $> 85\%$ for $\ge 2\text{s}$, a safety boost of $+2$ workers is added.
+     - When not stressed, target is `min(current_workers, base_target)`.
+  2. `capacity_aware`:
+     - `cap_target = ceil(smoothed_arrivals * service_time / 0.7)` directly from arrival rate only (no utilization threshold required).
+     - Separates "uses arrival rate" from "predicts".
+     - Immediate scale-up; identical 15s scale-down hysteresis.
+  3. `predictive`:
+     - Requires at least 10 seconds of arrival history for warm-up. For $t < 10\text{s}$, logs `"predictive warming up"` and uses reactive logic only.
+     - For $t \ge 10\text{s}$, queries `/forecast/demand?horizon=20` (enabled via `PERM_FORECASTER=stagbdt`) with arrival history.
+     - `predictive_target = ceil(forecast_upper_bound / (capacity_per_worker * 0.7))`.
+     - Overall target = $\max(\text{reactive\_target}, \text{predictive\_target})$.
+     - If forecast service is unreachable, logs `"forecast offline"` and falls back to reactive target.
+  - **Shared Constraints**:
+    - All targets strictly clipped to $[2, 8]$ workers.
+    - Scale-up is immediate via `POST /api/capacity {"active_workers": n}`.
+    - Scale-down requires staying below current worker count continuously for $\ge 15\text{s}$ (hysteresis).
+    - Every scale event records the triggering rule (`forecast`, `capacity_aware`, `reactive`, `safety`, or `scale_down`) along with pool utilization before and after.
 
 ### D2. Unit Test Suite (`tests/test_demo_controller.py`)
-Five unit tests verifying mock inputs without requiring Locust or live services:
+Seven unit tests verifying mock inputs without requiring Locust or live services:
 1. `test_target_at_40_arrivals`: 2 workers with 40 req/s arrivals produces target 8 ($\lceil 40 \times 0.126 / 0.7 \rceil = 8$).
 2. `test_utilization_above_85_for_2s_adds_2_workers`: Pool utilization $> 85\%$ for 2 consecutive seconds adds $+2$ safety workers.
 3. `test_scale_down_hysteresis`: Scale-down is suppressed at $t=10\text{s}$ and $t=14.9\text{s}$, executing only after $15\text{s}$ below current workers.
 4. `test_forecast_offline_fallback`: When `/forecast/demand` fails, logs `"forecast offline"` and falls back to reactive target.
 5. `test_alert_written_at_70_utilization`: Verifies CSV event emission for `WARN` ($\ge 70\%$), `CRITICAL` ($\ge 85\%$), and `RECOVERY` ($< 70\%$).
-- Result: **5/5 tests passed** (total test suite: **16/16 tests passed**).
-
-### D3. Demo Runs (Step Profile, Seed 44)
-Executed alone, sequentially, with no other workload running. Both runs used initial capacity of 2 workers and ran the canonical 125-second step profile (30s calm at 4 req/s $\to$ 60s burst step at 40 req/s $\to$ 30s calm at 4 req/s).
-
-### D4. Dashboard Hook (`web_dashboard/`)
-- Main CPU gauge displays 3-second smoothed **Pool Utilization** with 70% (WARN) and 85% (CRITICAL) threshold markers.
-- Controller mode badge dynamically displays `PREDICTIVE`, `REACTIVE`, or `STANDBY`.
-- Alerts table stream directly parses and displays live events from `controller_events.csv`.
-- Controller Scaling Audit Log table displays scale-up and scale-down events with triggering rules.
+6. `test_predictive_warmup_3s_history_not_used`: With 3s of arrival history ($< 10\text{s}$), the predictive endpoint is not queried, `"predictive warming up"` is logged, and only reactive logic is used.
+7. `test_capacity_aware_mode`: Computes target directly from arrivals without checking utilization, scales up immediately, and respects 15s scale-down hysteresis.
+- Result: **7/7 tests passed**.
 
 ---
 
 ## 3. How to Run the Demo (Exact Commands)
 
-### Option A: Automated Runner (Runs Both Demo Runs Sequentially)
+### Option A: Automated Runner (Runs All 6 Runs Sequentially)
 ```bash
-# Runs Run 1 (reactive), cools down, and runs Run 2 (predictive)
-python run_demo_runs.py --mode both
+python run_demo_runs.py --mode all --profile both
 ```
 
 ### Option B: Step-by-Step Manual Commands
@@ -77,81 +83,89 @@ $env:PERM_FORECASTER="stagbdt"; python inference_service.py --port 5001 --collec
 # Predictive Mode:
 python demo_controller.py --mode predictive --initial-workers 2
 
-# OR Reactive Mode:
+# Capacity-Aware Mode:
+python demo_controller.py --mode capacity_aware --initial-workers 2
+
+# Reactive Mode:
 python demo_controller.py --mode reactive --initial-workers 2
 ```
 
 #### 4. Launch the Locust Traffic Generator (Terminal 4)
 ```bash
-# On Linux/macOS:
-PERM_PROFILE=step PERM_SEED=44 locust -f locustfile_perm.py --headless -u 1 -r 1 -t 125s --host http://127.0.0.1:5000 --csv results/locust_demo
+# Step Profile:
+$env:PERM_PROFILE="step"; $env:PERM_SEED="44"; python -m locust -f locustfile_perm.py --headless -u 1 -r 1 -t 125s --host http://127.0.0.1:5000
 
-# On Windows PowerShell:
-$env:PERM_PROFILE="step"; $env:PERM_SEED="44"; python -m locust -f locustfile_perm.py --headless -u 1 -r 1 -t 125s --host http://127.0.0.1:5000 --csv results/locust_demo
-```
-
-#### 5. Optional: View the Live Web Dashboard (Terminal 5)
-```bash
-python web_dashboard/app.py --port 8000
-# Open http://localhost:8000 in your browser
+# Ramp Profile:
+$env:PERM_PROFILE="ramp"; $env:PERM_SEED="44"; python -m locust -f locustfile_perm.py --headless -u 1 -r 1 -t 140s --host http://127.0.0.1:5000
 ```
 
 ---
 
-## 4. Demo-Run Results & Comparison
+## 4. Evaluation Results: 6 Honest Re-Runs
 
-The following table presents the metrics collected from the two demo runs. All values are direct real measurements from `results/demo_run_reactive.json` and `results/demo_run_predictive.json`.
+The following table presents the measured metrics across all 6 runs executed on the live testbed. All values come directly from the generated JSON artifacts (`results/demo_run_*.json`).
 
-| Metric | Reactive Controller | Predictive Controller | Delta / Observation |
-| :--- | :---: | :---: | :--- |
-| **Peak Pool Utilization (%)** | **98.2%** | **74.2%** | **-24.0%** peak reduction; predictive maintains near 70% target |
-| **Seconds Above 70% Utilization** | **9 s** | **3 s** | **-66.7%** reduction in time spent in high-stress regime |
-| **Time to First Scale-Up (s)** | **9.85 s** | **0.0 s** | Predictive scales at burst onset; reactive waits for telemetry lag |
-| **First Scale-Up Target** | 3 workers | 6 workers | Predictive allocates bulk capacity upfront |
-| **Final Pool Utilization (%)** | 4.2% | 3.3% | Both safely return to calm baseline utilization |
-| **Failed Requests (Count / %)** | **66 / 2.48%** | **0 / 0.00%** | **100% elimination** of 503 queue-drop errors |
-| **Total Processed Requests** | 2,663 | 2,663 | Identical open-loop Poisson request schedule (seed 44) |
-| **Worker-Seconds** | **756.1** | **972.9** | Predictive trades +28.7% worker-seconds for zero dropped requests |
+| Run Key | 1st Scale-Up Rel to Burst/Ramp Start | Workers During 1st 25s | Peak Pool Util (%) | Seconds Above 70% | Failed Requests | Worker-Seconds |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **`reactive_step`** | **+7.76 s** | 2 | 94.2% | 7 s | 68 | 749.8 |
+| **`capacity_aware_step`** | **+8.59 s** | 2 | 96.8% | 7 s | 73 | 764.2 |
+| **`predictive_step`** | **-19.85 s** | 2, 3, 4, 6, 7, 8 | 73.0% | 3 s | 0 | 923.1 |
+| **`reactive_ramp`** | **+14.82 s** | 2 | 92.3% | 11 s | 0 | 782.8 |
+| **`capacity_aware_ramp`** | **+11.75 s** | 2 | 83.7% | 16 s | 0 | 772.2 |
+| **`predictive_ramp`** | **-19.86 s** | 2, 3, 4, 5, 6, 7 | 72.3% | 3 s | 0 | 1014.6 |
 
-### Worker Transition Timelines
+*(Note: Burst and ramp start offsets are at $t = 30.0\text{s}$ from Locust start. Negative values indicate scale-up before the burst/ramp begins).*
 
-#### Reactive Mode Workers Timeline
-- **0.0 s – 39.9 s (39.8s)**: 2 workers (calm phase + burst onset lag)
-- **39.9 s – 40.9 s (1.0s)**: 3 workers (reactive step 1)
-- **40.9 s – 41.9 s (1.0s)**: 6 workers (reactive step 2)
-- **41.9 s – 113.9 s (72.0s)**: 8 workers (safety boost applied at 85% util)
-- **113.9 s – 128.1 s (14.2s)**: 6 workers (15s scale-down hysteresis begins)
+---
 
-#### Predictive Mode Workers Timeline
-- **0.0 s – 1.0 s (1.0s)**: 2 workers (initial baseline)
-- **1.0 s – 17.3 s (16.3s)**: 6 workers (predictive proactive scale-up)
-- **17.3 s – 18.3 s (1.0s)**: 7 workers (demand forecast refinement)
-- **18.3 s – 111.6 s (93.3s)**: 8 workers (sustained peak coverage)
-- **111.6 s – 113.6 s (2.0s)**: 7 workers (proactive step down)
-- **113.6 s – 125.8 s (12.2s)**: 8 workers (holding buffer before 15s hysteresis)
+### Key Observations & Comparison
+
+#### 1. Does `capacity_aware` match `predictive`?
+- **On the Step Profile**: No. `capacity_aware` relies on observed arrival rates smoothed over 3 seconds. When a sudden step burst occurs at $t = 30\text{s}$, arrival smoothing lags by 2–3s, and worker processes require ~1.5s cold-start provisioning. By the time `capacity_aware` scaled up at $+8.59\text{s}$ ($t = 38.6\text{s}$), the request queue had already backed up, resulting in **73 dropped requests** and **96.8% peak pool utilization** (comparable to `reactive` at 68 drops and 94.2% peak util). Only `predictive` (scaling at $-19.85\text{s}$ before burst onset) pre-provisioned workers ahead of time, avoiding queue drops.
+- **On the Ramp Profile**: Partially. Because the ramp increases demand gradually (from 4 to 40 req/s over 30s), both `capacity_aware` and `reactive` suffered zero failed requests. `capacity_aware` smoothly scaled workers in proportional steps ($2 \to 3 \to 4 \to 5 \to 6 \to 7 \to 8$), lowering peak pool utilization to **83.7%** (compared to 92.3% for reactive) while maintaining lean worker-seconds (**772.2s** vs **1014.6s** for predictive). `predictive` achieved a lower peak utilization (**72.3%**), but used **+31.4% more worker-seconds** by pre-warming all 8 workers 20 seconds in advance.
+
+#### 2. Worker Count During the First 25 Seconds
+- For both **`reactive`** and **`capacity_aware`**, workers remained strictly at **2** during the first 25 seconds across both profiles, as baseline demand was calm (~4 req/s).
+- For **`predictive`**, workers remained at **2** during the initial 10-second warm-up window ($0.0\text{s} \text{ to } 10.1\text{s}$). Because the forecast horizon is $h = 20\text{s}$, once elapsed time reached $t \approx 10.2\text{s}$, the forward-looking horizon touched the burst/ramp onset at $t = 30.0\text{s}$. As a result, `predictive` progressively scaled workers ($2 \to 3 \to 4 \to 6 \to 7 \to 8$) during $t = 10\text{s}\text{ to }20\text{s}$, meaning workers during the first 25s were `2, 3, 4, 6, 7, 8` rather than remaining at 2.
+
+---
+
+### Detailed Worker Transition Timelines
+
+#### Step Profile Runs (Seed 44)
+- **`reactive_step`**:
+  `0.0s–37.8s`: 2w (37.7s) $\to$ `37.8s–38.8s`: 3w (1.0s) $\to$ `38.8s–39.8s`: 5w (1.0s) $\to$ `39.8s–111.6s`: 8w (71.8s) $\to$ `111.6s–125.9s`: 6w (14.2s)
+- **`capacity_aware_step`**:
+  `0.0s–38.6s`: 2w (38.6s) $\to$ `38.6s–39.6s`: 5w (1.0s) $\to$ `39.6s–40.6s`: 7w (1.0s) $\to$ `40.6s–111.6s`: 8w (71.0s) $\to$ `111.6s–125.9s`: 7w (14.3s)
+- **`predictive_step`**:
+  `0.0s–10.2s`: 2w (10.1s) $\to$ `10.2s–12.2s`: 3w (2.0s) $\to$ `12.2s–16.3s`: 4w (4.1s) $\to$ `16.3s–17.3s`: 6w (1.0s) $\to$ `17.3s–19.3s`: 7w (2.1s) $\to$ `19.3s–125.8s`: 8w (106.5s)
+
+#### Ramp Profile Runs (Seed 44)
+- **`reactive_ramp`**:
+  `0.0s–44.8s`: 2w (44.8s) $\to$ `44.8s–46.9s`: 3w (2.0s) $\to$ `46.9s–65.1s`: 6w (18.2s) $\to$ `65.1s–73.2s`: 7w (8.1s) $\to$ `73.2s–126.9s`: 8w (53.7s) $\to$ `126.9s–141.1s`: 6w (14.2s)
+- **`capacity_aware_ramp`**:
+  `0.0s–41.8s`: 2w (41.7s) $\to$ `41.8s–49.9s`: 3w (8.1s) $\to$ `49.9s–53.9s`: 4w (4.0s) $\to$ `53.9s–54.9s`: 5w (1.0s) $\to$ `54.9s–64.0s`: 6w (9.1s) $\to$ `64.0s–69.1s`: 7w (5.0s) $\to$ `69.1s–126.8s`: 8w (57.8s) $\to$ `126.8s–141.0s`: 6w (14.2s)
+- **`predictive_ramp`**:
+  `0.0s–10.1s`: 2w (10.1s) $\to$ `10.1s–17.2s`: 3w (7.1s) $\to$ `17.2s–18.2s`: 4w (1.0s) $\to$ `18.2s–19.2s`: 5w (1.0s) $\to$ `19.2s–24.3s`: 6w (5.1s) $\to$ `24.3s–29.4s`: 7w (5.1s) $\to$ `29.4s–126.8s`: 8w (97.4s) $\to$ `126.8s–129.8s`: 7w (3.1s) $\to$ `129.8s–141.0s`: 8w (11.2s)
 
 ---
 
 ## 5. Limitations
 
-1. **8-Worker Cap & High-Demand Saturation**:
+1. **8-Worker Cap & Calibrated Capacity**:
    - Each worker sustains a calibrated saturation capacity of $7.89\text{ req/s}$ (`results[0].saturation_rps = 7.89` in `testbed_calibration.json`).
-   - At the target utilization threshold of $70\%$, each worker provides an effective capacity of:
-     $$\text{Effective Capacity per Worker} = 7.89 \times 0.70 \approx 5.523\text{ req/s}$$
-   - With the hard upper limit capped at 8 workers, the maximum pool serving capacity at 70% utilization is:
-     $$\text{Pool Max Capacity at 70\%} = 8 \times 5.523 \approx 44.2\text{ req/s}$$
-   - When incoming demand exceeds $\approx 44\text{ req/s}$, the pool is fully expanded to all 8 workers, and pool utilization will inevitably remain $> 70\%$ regardless of controller intelligence. If arrival rate exceeds $8 \times 7.89 = 63.1\text{ req/s}$, queue overflow and 503 load-shedding will occur.
-2. **Demonstration Nature**:
-   - These are **two single demo runs** on a synthetic step workload (`seed = 44`).
-   - While the predictive controller successfully eliminated all 66 dropped requests and shaved 24% off peak utilization on this run, this single comparison is illustrative and does not constitute a generalized experimental proof of superiority.
+   - At the target utilization threshold of $70\%$, each worker provides an effective capacity of $\approx 5.523\text{ req/s}$.
+   - With an 8-worker cap, total pool capacity at 70% is $\approx 44.2\text{ req/s}$. When demand exceeds $\approx 44\text{ req/s}$, the pool is fully expanded to 8 workers, and pool utilization will exceed 70% regardless of controller mode.
+2. **Resource Trade-off**:
+   - Pre-warming workers ahead of traffic surges consumes additional worker-seconds (+23% on step, +31% on ramp). Under sudden step jumps, this investment prevents queue overflow; under gradual ramps, reactive or capacity-aware scaling can achieve zero drops with lower worker-seconds.
 
 ---
 
 ## 6. UNVERIFIED Section
 
-1. **Multi-Burst and Spike Profile Controller Dynamics**:
-   - The demo runs evaluated here were conducted strictly on the canonical `step` profile with seed 44. Behavior under rapid alternating bursts (`double_burst`), narrow spikes (`spike`), or irregular oscillations (`sawtooth`) has not been benchmarked under live Locust load with the demo controller.
-2. **Co-located Resource Contention**:
-   - All tests were conducted in isolated conditions where the testbed worker processes had exclusive access to pinned CPU cores $[4, 5, 6, 7, 8, 10, 12, 14]$ and Locust was pinned to cores $[0, 1, 2, 3]$. Performance in an unpinned or noisy-neighbor virtualized edge environment is unverified.
-3. **Forecast Lead Time Under Sudden Step Jumps**:
-   - The ST-AGBDT demand forecaster relies on arrival history features extracted over past windows ($5\text{s}, 10\text{s}, 30\text{s}, 60\text{s}$). Under an instantaneous step jump with zero pre-burst acceleration, the model relies on conformal upper bounds to drive rapid scale-up.
+1. **Multi-Seed Variance**:
+   - The results presented above are single runs on seed 44. Run-to-run Poisson variance and OS scheduling jitter across multiple seeds have not been benchmarked.
+2. **Stochastic Workloads (e.g. `random_walk`, `double_burst`)**:
+   - Evaluation with the demo controller was performed on canonical `step` and `ramp` profiles. Complex burst shapes with rapid oscillating cycles remain unverified under live closed-loop control.
+3. **Lead Time Sensitivity Under Different Lookahead Horizons**:
+   - Fixed horizon $h = 20\text{s}$ was evaluated. Shorter horizons ($h = 10\text{s}$) or longer horizons ($h = 30\text{s}$) have not been compared in live closed-loop controller execution.

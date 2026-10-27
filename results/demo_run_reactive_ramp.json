@@ -1,0 +1,190 @@
+{
+  "mode": "reactive",
+  "profile": "ramp",
+  "seed": 44,
+  "burst_start_sec": 30.0,
+  "first_scale_up_rel_sec": 14.82,
+  "first_scale_up_target": 3,
+  "workers_first_25s": "2",
+  "peak_pool_utilization_pct": 92.29,
+  "seconds_above_70": 11,
+  "final_utilization_pct": 9.6,
+  "failed_requests": 0,
+  "locust_requests": 2756,
+  "locust_failures": 0,
+  "worker_seconds": 782.8,
+  "num_telemetry_samples": 140,
+  "workers_over_time": [
+    {
+      "workers": 2,
+      "start_sec": 0.0,
+      "end_sec": 44.8,
+      "duration_sec": 44.8
+    },
+    {
+      "workers": 3,
+      "start_sec": 44.8,
+      "end_sec": 46.9,
+      "duration_sec": 2.0
+    },
+    {
+      "workers": 6,
+      "start_sec": 46.9,
+      "end_sec": 65.1,
+      "duration_sec": 18.2
+    },
+    {
+      "workers": 7,
+      "start_sec": 65.1,
+      "end_sec": 73.2,
+      "duration_sec": 8.1
+    },
+    {
+      "workers": 8,
+      "start_sec": 73.2,
+      "end_sec": 126.9,
+      "duration_sec": 53.7
+    },
+    {
+      "workers": 6,
+      "start_sec": 126.9,
+      "end_sec": 141.1,
+      "duration_sec": 14.2
+    }
+  ],
+  "controller_events": [
+    {
+      "time": "2026-10-27T07:42:37.333723+00:00",
+      "type": "WARN",
+      "signal": "pool_utilization",
+      "value": "74.13",
+      "reason": "pool utilization crossed 70% warning threshold"
+    },
+    {
+      "time": "2026-10-27T07:42:37.333723+00:00",
+      "type": "SCALE_UP",
+      "signal": "active_workers",
+      "value": "3",
+      "reason": "rule=reactive;from=2;to=3;util_before=74.1%;util_after=65.5%"
+    },
+    {
+      "time": "2026-10-27T07:42:38.334158+00:00",
+      "type": "CRITICAL",
+      "signal": "pool_utilization",
+      "value": "92.29",
+      "reason": "pool utilization crossed 85% critical threshold"
+    },
+    {
+      "time": "2026-10-27T07:42:38.334158+00:00",
+      "type": "SCALE_UP",
+      "signal": "active_workers",
+      "value": "3",
+      "reason": "rule=reactive;from=2;to=3;util_before=92.3%;util_after=65.1%"
+    },
+    {
+      "time": "2026-10-27T07:42:39.339088+00:00",
+      "type": "SCALE_UP",
+      "signal": "active_workers",
+      "value": "6",
+      "reason": "rule=safety;from=3;to=6;util_before=91.8%;util_after=39.6%"
+    },
+    {
+      "time": "2026-10-27T07:42:41.329884+00:00",
+      "type": "RECOVERY",
+      "signal": "pool_utilization",
+      "value": "61.14",
+      "reason": "pool utilization recovered below 70% from WARN"
+    },
+    {
+      "time": "2026-10-27T07:42:57.331643+00:00",
+      "type": "WARN",
+      "signal": "pool_utilization",
+      "value": "75.77",
+      "reason": "pool utilization crossed 70% warning threshold"
+    },
+    {
+      "time": "2026-10-27T07:42:57.331643+00:00",
+      "type": "SCALE_UP",
+      "signal": "active_workers",
+      "value": "7",
+      "reason": "rule=reactive;from=6;to=7;util_before=75.8%;util_after=78.9%"
+    },
+    {
+      "time": "2026-10-27T07:42:58.331480+00:00",
+      "type": "SCALE_UP",
+      "signal": "active_workers",
+      "value": "7",
+      "reason": "rule=reactive;from=6;to=7;util_before=72.6%;util_after=49.3%"
+    },
+    {
+      "time": "2026-10-27T07:43:00.332870+00:00",
+      "type": "RECOVERY",
+      "signal": "pool_utilization",
+      "value": "62.7",
+      "reason": "pool utilization recovered below 70% from WARN"
+    },
+    {
+      "time": "2026-10-27T07:43:06.336734+00:00",
+      "type": "WARN",
+      "signal": "pool_utilization",
+      "value": "71.77",
+      "reason": "pool utilization crossed 70% warning threshold"
+    },
+    {
+      "time": "2026-10-27T07:43:06.336734+00:00",
+      "type": "SCALE_UP",
+      "signal": "active_workers",
+      "value": "8",
+      "reason": "rule=reactive;from=7;to=8;util_before=71.8%;util_after=65.3%"
+    },
+    {
+      "time": "2026-10-27T07:43:07.342436+00:00",
+      "type": "RECOVERY",
+      "signal": "pool_utilization",
+      "value": "67.0",
+      "reason": "pool utilization recovered below 70% from WARN"
+    },
+    {
+      "time": "2026-10-27T07:43:39.340297+00:00",
+      "type": "WARN",
+      "signal": "pool_utilization",
+      "value": "72.38",
+      "reason": "pool utilization crossed 70% warning threshold"
+    },
+    {
+      "time": "2026-10-27T07:43:41.337686+00:00",
+      "type": "RECOVERY",
+      "signal": "pool_utilization",
+      "value": "69.79",
+      "reason": "pool utilization recovered below 70% from WARN"
+    },
+    {
+      "time": "2026-10-27T07:43:44.336989+00:00",
+      "type": "WARN",
+      "signal": "pool_utilization",
+      "value": "71.15",
+      "reason": "pool utilization crossed 70% warning threshold"
+    },
+    {
+      "time": "2026-10-27T07:43:45.341299+00:00",
+      "type": "RECOVERY",
+      "signal": "pool_utilization",
+      "value": "45.98",
+      "reason": "pool utilization recovered below 70% from WARN"
+    },
+    {
+      "time": "2026-10-27T07:44:00.344693+00:00",
+      "type": "SCALE_DOWN",
+      "signal": "active_workers",
+      "value": "6",
+      "reason": "rule=scale_down;from=8;to=6;util_before=7.3%;util_after=16.6%"
+    },
+    {
+      "time": "2026-10-27T07:44:16.335666+00:00",
+      "type": "SCALE_DOWN",
+      "signal": "active_workers",
+      "value": "2",
+      "reason": "rule=scale_down;from=6;to=2;util_before=4.9%;util_after=0.0%"
+    }
+  ]
+}

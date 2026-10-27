@@ -10,6 +10,7 @@ Tests:
 5. An alert is written when pool utilization crosses 70%
 """
 
+import logging
 import os
 import tempfile
 import pytest
@@ -149,8 +150,11 @@ def test_scale_down_hysteresis(controller):
 def test_forecast_offline_fallback(controller, caplog):
     """
     4. Forecast-offline fallback works:
-    When /forecast/demand is offline, fall back to reactive and log 'forecast offline'.
+    When /forecast/demand is offline (and past warmup), fall back to reactive and log 'forecast offline'.
     """
+    # Prime history with 10 samples to complete warmup
+    controller.arrivals_history.extend([25.0] * 10)
+
     record = {
         "active_workers": 2,
         "worker_cpu_percent": 10.0,
@@ -240,3 +244,114 @@ def test_alert_written_at_70_utilization(controller, temp_csv):
     with open(temp_csv, "r", encoding="utf-8") as f:
         content = f.read()
     assert "RECOVERY,pool_utilization" in content
+
+
+def test_predictive_warmup_3s_history_not_used(controller, caplog):
+    """
+    With 3 s of history, the predictive path is not used:
+    - query_forecast is NOT called
+    - 'predictive warming up' is logged
+    - only reactive logic is used
+    """
+    caplog.set_level(logging.INFO)
+    record = {
+        "active_workers": 2,
+        "worker_cpu_percent": 1.0,
+        "queue_depth": 0,
+        "arrivals_count": 5.0,
+        "error_count": 0,
+        "timestamp": "2026-10-27T12:00:00Z",
+    }
+    with patch.object(controller, "query_forecast") as mock_forecast:
+        # Step 1 (history length 1)
+        res1 = controller.evaluate_step(record, now_monotonic=100.0)
+        assert res1["predictive_target"] == 0
+        mock_forecast.assert_not_called()
+
+        # Step 2 (history length 2)
+        res2 = controller.evaluate_step(record, now_monotonic=101.0)
+        assert res2["predictive_target"] == 0
+        mock_forecast.assert_not_called()
+
+        # Step 3 (history length 3)
+        res3 = controller.evaluate_step(record, now_monotonic=102.0)
+        assert res3["predictive_target"] == 0
+        mock_forecast.assert_not_called()
+
+        # Verify predictive path was not used and log message emitted
+        assert len(controller.arrivals_history) == 3
+        assert any("predictive warming up" in r.message for r in caplog.records)
+        assert res3["trigger_rule"] in ("reactive", "hold")
+        assert res3["chosen_target"] == 2
+
+
+def test_capacity_aware_mode(temp_csv):
+    """
+    capacity_aware mode:
+    - computes ceil(smoothed_arrivals * service_time / 0.7) directly from arrivals
+    - NO utilization threshold required to scale up
+    - scale-up is immediate
+    - scale-down respects 15s hysteresis
+    """
+    cap_ctrl = DemoController(
+        mode="capacity_aware",
+        initial_workers=2,
+        csv_path=temp_csv,
+    )
+    assert cap_ctrl.mode == "capacity_aware"
+
+    # Step 1: High arrivals (40 req/s) with 0% CPU and 0 queue depth
+    # Reactive mode would not scale up because util < 70% and queue < 5.
+    # But capacity_aware mode scales up immediately!
+    record_high = {
+        "active_workers": 2,
+        "worker_cpu_percent": 0.0,  # 0% CPU!
+        "queue_depth": 0,          # 0 queue!
+        "arrivals_count": 40.0,
+        "error_count": 0,
+        "timestamp": "2026-10-27T12:00:00Z",
+    }
+    with patch.object(cap_ctrl, "query_forecast") as mock_forecast, \
+         patch.object(cap_ctrl, "apply_capacity", return_value=8) as mock_apply:
+        res = cap_ctrl.evaluate_step(record_high, now_monotonic=100.0)
+        mock_forecast.assert_not_called()
+        # ceil(40 * 0.126 / 0.7) = 8
+        assert res["chosen_target"] == 8
+        assert res["trigger_rule"] == "capacity_aware"
+        assert res["scale_event"] is not None
+        assert res["scale_event"]["to_workers"] == 8
+        mock_apply.assert_called_once_with(8)
+
+    # Step 2: Low arrivals (4 req/s), currently at 8 workers -> scale down hysteresis
+    cap_ctrl.current_workers = 8
+    cap_ctrl.arrivals_history.clear()
+    record_low = {
+        "active_workers": 8,
+        "worker_cpu_percent": 0.0,
+        "queue_depth": 0,
+        "arrivals_count": 4.0,
+        "error_count": 0,
+        "timestamp": "2026-10-27T12:00:01Z",
+    }
+    with patch.object(cap_ctrl, "apply_capacity") as mock_apply:
+        # t = 0s: target = 2 (< 8). Hysteresis begins, no scale down yet.
+        r0 = cap_ctrl.evaluate_step(record_low, now_monotonic=200.0)
+        assert r0["chosen_target"] == 2
+        assert r0["scale_event"] is None
+        mock_apply.assert_not_called()
+
+        # t = 10s: still within 15s hysteresis
+        r10 = cap_ctrl.evaluate_step(record_low, now_monotonic=210.0)
+        assert r10["chosen_target"] == 2
+        assert r10["scale_event"] is None
+        mock_apply.assert_not_called()
+
+        # t = 15.5s: elapsed >= 15s -> scale down triggers!
+        mock_apply.return_value = 2
+        r15 = cap_ctrl.evaluate_step(record_low, now_monotonic=215.5)
+        assert r15["chosen_target"] == 2
+        assert r15["scale_event"] is not None
+        assert r15["scale_event"]["action"] == "scale_down"
+        assert r15["scale_event"]["to_workers"] == 2
+        mock_apply.assert_called_once_with(2)
+

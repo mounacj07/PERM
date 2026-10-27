@@ -1,0 +1,21 @@
+time,type,signal,value,reason
+2026-10-27T07:45:17.505714+00:00,WARN,pool_utilization,70.88,pool utilization crossed 70% warning threshold
+2026-10-27T07:45:17.505714+00:00,SCALE_UP,active_workers,3,rule=capacity_aware;from=2;to=3;util_before=70.9%;util_after=46.8%
+2026-10-27T07:45:18.503210+00:00,RECOVERY,pool_utilization,63.57,pool utilization recovered below 70% from WARN
+2026-10-27T07:45:25.511853+00:00,WARN,pool_utilization,75.52,pool utilization crossed 70% warning threshold
+2026-10-27T07:45:25.511853+00:00,SCALE_UP,active_workers,4,rule=capacity_aware;from=3;to=4;util_before=75.5%;util_after=71.1%
+2026-10-27T07:45:26.546772+00:00,SCALE_UP,active_workers,4,rule=capacity_aware;from=3;to=4;util_before=81.7%;util_after=69.1%
+2026-10-27T07:45:29.514029+00:00,SCALE_UP,active_workers,5,rule=capacity_aware;from=4;to=5;util_before=75.8%;util_after=64.7%
+2026-10-27T07:45:30.503290+00:00,SCALE_UP,active_workers,6,rule=capacity_aware;from=4;to=6;util_before=83.7%;util_after=56.6%
+2026-10-27T07:45:33.510222+00:00,RECOVERY,pool_utilization,67.27,pool utilization recovered below 70% from WARN
+2026-10-27T07:45:39.519800+00:00,SCALE_UP,active_workers,7,rule=capacity_aware;from=6;to=7;util_before=67.0%;util_after=57.7%
+2026-10-27T07:45:40.512452+00:00,WARN,pool_utilization,76.08,pool utilization crossed 70% warning threshold
+2026-10-27T07:45:40.512452+00:00,SCALE_UP,active_workers,7,rule=capacity_aware;from=6;to=7;util_before=76.1%;util_after=78.9%
+2026-10-27T07:45:43.497221+00:00,RECOVERY,pool_utilization,60.24,pool utilization recovered below 70% from WARN
+2026-10-27T07:45:44.517351+00:00,SCALE_UP,active_workers,8,rule=capacity_aware;from=7;to=8;util_before=65.9%;util_after=61.5%
+2026-10-27T07:46:22.506699+00:00,WARN,pool_utilization,73.86,pool utilization crossed 70% warning threshold
+2026-10-27T07:46:24.516615+00:00,RECOVERY,pool_utilization,69.99,pool utilization recovered below 70% from WARN
+2026-10-27T07:46:26.507516+00:00,WARN,pool_utilization,72.29,pool utilization crossed 70% warning threshold
+2026-10-27T07:46:28.506342+00:00,RECOVERY,pool_utilization,44.37,pool utilization recovered below 70% from WARN
+2026-10-27T07:46:43.503036+00:00,SCALE_DOWN,active_workers,6,rule=scale_down;from=8;to=6;util_before=7.2%;util_after=17.9%
+2026-10-27T07:46:59.500514+00:00,SCALE_DOWN,active_workers,2,rule=scale_down;from=6;to=2;util_before=4.9%;util_after=2.3%

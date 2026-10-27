@@ -1,0 +1,11 @@
+time,type,signal,value,reason
+2026-10-27T07:34:58.829775+00:00,SCALE_UP,active_workers,3,rule=reactive;from=2;to=3;util_before=37.5%;util_after=47.5%
+2026-10-27T07:34:59.831084+00:00,SCALE_UP,active_workers,5,rule=reactive;from=2;to=5;util_before=61.1%;util_after=40.0%
+2026-10-27T07:35:00.831865+00:00,CRITICAL,pool_utilization,89.68,pool utilization crossed 85% critical threshold
+2026-10-27T07:35:00.831865+00:00,SCALE_UP,active_workers,8,rule=reactive;from=3;to=8;util_before=89.7%;util_after=36.7%
+2026-10-27T07:35:01.829847+00:00,SCALE_UP,active_workers,8,rule=safety;from=5;to=8;util_before=94.2%;util_after=52.9%
+2026-10-27T07:35:05.838045+00:00,RECOVERY,pool_utilization,68.77,pool utilization recovered below 70% from WARN
+2026-10-27T07:35:54.836174+00:00,WARN,pool_utilization,73.25,pool utilization crossed 70% warning threshold
+2026-10-27T07:35:56.839776+00:00,RECOVERY,pool_utilization,67.29,pool utilization recovered below 70% from WARN
+2026-10-27T07:36:13.834005+00:00,SCALE_DOWN,active_workers,6,rule=scale_down;from=8;to=6;util_before=6.1%;util_after=3.9%
+2026-10-27T07:36:29.835206+00:00,SCALE_DOWN,active_workers,2,rule=scale_down;from=6;to=2;util_before=2.9%;util_after=0.0%

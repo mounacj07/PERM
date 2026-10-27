@@ -1,0 +1,18 @@
+time,type,signal,value,reason
+2026-10-27T07:47:36.524210+00:00,SCALE_UP,active_workers,3,rule=forecast;from=2;to=3;util_before=29.4%;util_after=16.7%
+2026-10-27T07:47:37.524693+00:00,SCALE_UP,active_workers,3,rule=forecast;from=2;to=3;util_before=27.5%;util_after=18.7%
+2026-10-27T07:47:43.534065+00:00,SCALE_UP,active_workers,4,rule=forecast;from=3;to=4;util_before=19.3%;util_after=11.2%
+2026-10-27T07:47:44.524993+00:00,SCALE_UP,active_workers,4,rule=forecast;from=3;to=4;util_before=16.8%;util_after=13.4%
+2026-10-27T07:47:45.537116+00:00,SCALE_UP,active_workers,5,rule=forecast;from=4;to=5;util_before=15.1%;util_after=9.9%
+2026-10-27T07:47:46.531098+00:00,SCALE_UP,active_workers,6,rule=forecast;from=4;to=6;util_before=17.5%;util_after=15.0%
+2026-10-27T07:47:51.535037+00:00,SCALE_UP,active_workers,7,rule=forecast;from=6;to=7;util_before=13.0%;util_after=12.0%
+2026-10-27T07:47:52.531203+00:00,SCALE_UP,active_workers,7,rule=forecast;from=6;to=7;util_before=9.4%;util_after=5.3%
+2026-10-27T07:47:56.534522+00:00,SCALE_UP,active_workers,8,rule=forecast;from=7;to=8;util_before=7.1%;util_after=6.0%
+2026-10-27T07:47:57.511519+00:00,SCALE_UP,active_workers,8,rule=forecast;from=7;to=8;util_before=6.9%;util_after=6.6%
+2026-10-27T07:49:13.538482+00:00,WARN,pool_utilization,72.29,pool utilization crossed 70% warning threshold
+2026-10-27T07:49:15.578429+00:00,RECOVERY,pool_utilization,66.45,pool utilization recovered below 70% from WARN
+2026-10-27T07:49:18.534530+00:00,WARN,pool_utilization,70.63,pool utilization crossed 70% warning threshold
+2026-10-27T07:49:19.527709+00:00,RECOVERY,pool_utilization,45.47,pool utilization recovered below 70% from WARN
+2026-10-27T07:49:34.530977+00:00,SCALE_DOWN,active_workers,7,rule=scale_down;from=8;to=7;util_before=7.3%;util_after=15.1%
+2026-10-27T07:49:36.531828+00:00,SCALE_UP,active_workers,8,rule=forecast;from=7;to=8;util_before=9.2%;util_after=4.1%
+2026-10-27T07:49:37.536434+00:00,SCALE_UP,active_workers,8,rule=forecast;from=7;to=8;util_before=7.9%;util_after=8.0%

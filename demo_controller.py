@@ -75,8 +75,8 @@ class DemoController:
         state_path: str = DEFAULT_STATE_PATH,
     ):
         self.mode = mode.lower()
-        if self.mode not in ("predictive", "reactive"):
-            raise ValueError(f"Invalid mode '{mode}'; must be 'predictive' or 'reactive'")
+        if self.mode not in ("predictive", "reactive", "capacity_aware"):
+            raise ValueError(f"Invalid mode '{mode}'; must be 'predictive', 'reactive', or 'capacity_aware'")
 
         self.collector_url = collector_url.rstrip("/")
         self.inference_url = inference_url.rstrip("/")
@@ -284,7 +284,11 @@ class DemoController:
         predictive_target = ceil(forecast_upper_bound / (capacity_per_worker * 0.7)).
         If offline, falls back to reactive and logs 'forecast offline'.
         """
-        if self.mode == "reactive":
+        if self.mode != "predictive":
+            return 0, None
+
+        if len(arrivals_list) < 10:
+            log.info("predictive warming up")
             return 0, None
 
         forecast_data = self.query_forecast(arrivals_list)
@@ -297,6 +301,14 @@ class DemoController:
         target = int(math.ceil(upper_bound / eff_capacity))
         target = max(self.min_workers, min(self.max_workers, target))
         return target, forecast_data
+
+    def compute_capacity_aware_target(self, smoothed_arrivals: float) -> int:
+        """
+        capacity_aware: ceil(smoothed_arrivals * service_time / 0.7)
+        from arrivals only, no utilization threshold.
+        """
+        target = int(math.ceil(smoothed_arrivals * self.service_time / 0.7))
+        return max(self.min_workers, min(self.max_workers, target))
 
     def evaluate_step(
         self,
@@ -340,22 +352,35 @@ class DemoController:
             self.consecutive_above_85 = 0
 
         # 5. Compute scaling targets
-        reactive_target, reactive_rule = self.compute_reactive_target(
-            smoothed_arrivals, smoothed_util, queue_depth, self.current_workers
-        )
-
-        predictive_target, forecast_info = self.compute_predictive_target(list(self.arrivals_history))
-
-        # Scaling decision each second = max(reactive_target, predictive_target)
-        if predictive_target > reactive_target:
-            scaling_target = predictive_target
-            trigger_rule = "forecast"
-        elif reactive_target > self.current_workers:
-            scaling_target = reactive_target
-            trigger_rule = reactive_rule
+        if self.mode == "capacity_aware":
+            cap_target = self.compute_capacity_aware_target(smoothed_arrivals)
+            reactive_target = cap_target
+            predictive_target = 0
+            forecast_info = None
+            scaling_target = cap_target
+            if scaling_target > self.current_workers:
+                trigger_rule = "capacity_aware"
+            elif scaling_target < self.current_workers:
+                trigger_rule = "scale_down"
+            else:
+                trigger_rule = "capacity_aware"
         else:
-            scaling_target = reactive_target
-            trigger_rule = "reactive"
+            reactive_target, reactive_rule = self.compute_reactive_target(
+                smoothed_arrivals, smoothed_util, queue_depth, self.current_workers
+            )
+
+            predictive_target, forecast_info = self.compute_predictive_target(list(self.arrivals_history))
+
+            # Scaling decision each second = max(reactive_target, predictive_target)
+            if predictive_target > reactive_target:
+                scaling_target = predictive_target
+                trigger_rule = "forecast"
+            elif reactive_target > self.current_workers:
+                scaling_target = reactive_target
+                trigger_rule = reactive_rule
+            else:
+                scaling_target = reactive_target
+                trigger_rule = "reactive"
 
         # Clip target to [2, 8]
         scaling_target = max(self.min_workers, min(self.max_workers, scaling_target))
@@ -530,9 +555,9 @@ def main():
     parser = argparse.ArgumentParser(description="PERM Standalone Demo Controller")
     parser.add_argument(
         "--mode",
-        choices=["predictive", "reactive"],
+        choices=["predictive", "reactive", "capacity_aware"],
         default="predictive",
-        help="Scaling mode: 'predictive' or 'reactive'",
+        help="Scaling mode: 'predictive', 'reactive', or 'capacity_aware'",
     )
     parser.add_argument(
         "--initial-workers",
