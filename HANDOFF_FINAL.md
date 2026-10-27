@@ -109,6 +109,7 @@ testpaths = tests
 *Citation: `models/stagbdt_final_config.json`*
 
 - **Name**: `ST-AGBDT (expectile boosted trees + conformal bound)`
+- **Git Commit**: `908aca68d8b3095a429e0ee1349955ee540215d6` (tagged `final-model-v1`, clean working tree)
 - **Loss Function**: Asymmetric Least Squares (Expectile) with $\alpha = 0.85$
 - **Ensemble**: 50 trees, max depth 4, learning rate 0.1, L2 regularization 1.0, 64 bins
 - **Size**: ~54 KB per lean compiled model JSON (`models/stagbdt_h10_lean.json`, `h20`, `h30`)

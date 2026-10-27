@@ -2,7 +2,7 @@
   "format_version": "1.0",
   "name": "ST-AGBDT (expectile boosted trees + conformal bound)",
   "description": "ST-AGBDT final model configuration for horizons 10s, 20s, 30s",
-  "git_commit": "86a5603231a12d210fab9e3d3cab193591c2beec",
+  "git_commit": "908aca68d8b3095a429e0ee1349955ee540215d6",
   "clean_tree": true,
   "date_trained": "2026-10-27",
   "target_utilization": 0.7,

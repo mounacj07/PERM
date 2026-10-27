@@ -4,7 +4,7 @@
 This directory contains the production-ready **ST-AGBDT (expectile boosted trees + conformal bound)** models trained on Locust canonical runs (`data/runs_locust`).
 All models use **arrival-only features**, ensuring predictions remain valid regardless of online worker autoscaling pool adjustments.
 
-- **Git Commit**: `86a5603231a12d210fab9e3d3cab193591c2beec`
+- **Git Commit**: `908aca68d8b3095a429e0ee1349955ee540215d6` (tagged `final-model-v1`)
 - **Loss Function**: Asymmetric Least Squares (Expectile) with $\alpha = 0.85$
 - **Ensemble**: 50 trees, max depth 4, learning rate 0.1, 64 histogram bins
 - **Target**: Maximum of 3-second rolling smoothed arrivals over future horizon $h \in \{10, 20, 30\}$ seconds
