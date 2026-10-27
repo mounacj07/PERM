@@ -43,6 +43,7 @@ import sys
 import time
 from collections import deque
 from datetime import datetime, timezone
+import tempfile
 from typing import Any, Deque, Dict, List, Optional, Tuple
 
 import requests
@@ -59,7 +60,45 @@ DEFAULT_CALIBRATION_PATH = os.path.join(PROJECT_ROOT, "testbed_calibration.json"
 DEFAULT_CSV_PATH = os.path.join(PROJECT_ROOT, "controller_events.csv")
 DEFAULT_STATE_PATH = os.path.join(PROJECT_ROOT, "controller_state.json")
 DEFAULT_STATUS_PATH = os.path.join(PROJECT_ROOT, "controller_status.json")
+DEFAULT_CONTROL_PATH = os.path.join(PROJECT_ROOT, "results", "controller_control.json")
+DEFAULT_PENDING_PATH = os.path.join(PROJECT_ROOT, "results", "controller_pending.json")
+DEFAULT_APPROVAL_PATH = os.path.join(PROJECT_ROOT, "results", "controller_approval.json")
+DEFAULT_TRACE_PATH = os.path.join(PROJECT_ROOT, "results", "controller_trace.csv")
+
 CSV_HEADER = ["time", "type", "signal", "value", "reason"]
+TRACE_HEADER = [
+    "t",
+    "arrivals",
+    "smoothed_arrivals",
+    "forecast_raw",
+    "forecast_upper",
+    "horizon",
+    "reactive_target",
+    "predictive_target",
+    "chosen_target",
+    "workers",
+    "util",
+    "approval_mode",
+    "forecast_online",
+]
+
+
+def atomic_write_json(file_path: str, data: Any) -> None:
+    """Write data as JSON atomically using a temp file and os.replace."""
+    dir_name = os.path.dirname(os.path.abspath(file_path))
+    os.makedirs(dir_name, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=dir_name, prefix=".tmp_", suffix=".json")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+        os.replace(tmp_path, file_path)
+    except Exception:
+        if os.path.exists(tmp_path):
+            try:
+                os.remove(tmp_path)
+            except Exception:
+                pass
+        raise
 
 
 class DemoController:
@@ -68,6 +107,7 @@ class DemoController:
     def __init__(
         self,
         mode: str = "predictive",
+        policy: str = "hybrid",
         initial_workers: int = 2,
         collector_url: str = "http://127.0.0.1:5000",
         inference_url: str = "http://127.0.0.1:5001",
@@ -75,16 +115,35 @@ class DemoController:
         csv_path: str = DEFAULT_CSV_PATH,
         state_path: str = DEFAULT_STATE_PATH,
         status_path: str = DEFAULT_STATUS_PATH,
+        approval: str = "auto",
+        control_path: str = DEFAULT_CONTROL_PATH,
+        pending_path: str = DEFAULT_PENDING_PATH,
+        approval_path: str = DEFAULT_APPROVAL_PATH,
+        trace_path: str = DEFAULT_TRACE_PATH,
     ):
         self.mode = mode.lower()
         if self.mode not in ("predictive", "reactive", "capacity_aware"):
             raise ValueError(f"Invalid mode '{mode}'; must be 'predictive', 'reactive', or 'capacity_aware'")
+
+        self.policy = str(policy or "hybrid").lower()
+        if self.policy not in ("hybrid", "predictive_only"):
+            raise ValueError(f"Invalid policy '{policy}'; must be 'hybrid' or 'predictive_only'")
+        self.last_forecast_unavailable_log: float = -999.0
 
         self.collector_url = collector_url.rstrip("/")
         self.inference_url = inference_url.rstrip("/")
         self.csv_path = csv_path
         self.state_path = state_path
         self.status_path = status_path
+        self.approval_mode: str = approval.lower()
+        if self.approval_mode not in ("auto", "manual"):
+            self.approval_mode = "auto"
+        self.ask_before_release: bool = False
+        self.control_path = control_path
+        self.pending_path = pending_path
+        self.approval_path = approval_path
+        self.trace_path = trace_path
+
         self.forecast_online: bool = False
         self.min_workers = 2
         self.max_workers = 8
@@ -102,7 +161,32 @@ class DemoController:
         self.pending_scale_down_target: Optional[int] = None
         self.events_log: List[Dict[str, Any]] = []
 
+        # Manual approval tracking
+        self.dismissed_targets: Dict[int, float] = {}  # target_workers -> monotonic_time
+        self.current_pending_proposal: Optional[Dict[str, Any]] = None
+        self.start_monotonic = time.monotonic()
+
         self._ensure_csv_header()
+        self._ensure_trace_header()
+
+    def _ensure_trace_header(self) -> None:
+        if not os.path.exists(self.trace_path):
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(self.trace_path)), exist_ok=True)
+                with open(self.trace_path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(TRACE_HEADER)
+            except Exception as exc:
+                log.warning("Could not initialize %s: %s", self.trace_path, exc)
+
+    def write_trace_row(self, row_dict: Dict[str, Any]) -> None:
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(self.trace_path)), exist_ok=True)
+            with open(self.trace_path, "a", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=TRACE_HEADER, extrasaction="ignore")
+                writer.writerow(row_dict)
+        except Exception as exc:
+            log.debug("Trace append error: %s", exc)
 
     def load_calibration(self, path: str) -> None:
         """Load service_time, capacity_per_worker, and logical_cpus from calibration file."""
@@ -392,16 +476,37 @@ class DemoController:
 
             predictive_target, forecast_info = self.compute_predictive_target(list(self.arrivals_history))
 
-            # Scaling decision each second = max(reactive_target, predictive_target)
-            if predictive_target > reactive_target:
-                scaling_target = predictive_target
-                trigger_rule = "forecast"
-            elif reactive_target > self.current_workers:
-                scaling_target = reactive_target
-                trigger_rule = reactive_rule
+            if self.mode == "predictive" and self.policy == "predictive_only":
+                # In predictive_only, scaling_target = predictive_target ONLY.
+                # Reactive, utilization and queue rules are not used for scaling (alerts are still tracked for display).
+                # Never fall back: if the forecast is unavailable or null, hold current workers, log
+                # FORECAST_UNAVAILABLE (max once per 10s) and write forecast_online=false to the trace.
+                if forecast_info is not None and self.forecast_online and predictive_target > 0:
+                    scaling_target = predictive_target
+                    if scaling_target > self.current_workers:
+                        trigger_rule = "forecast"
+                    elif scaling_target < self.current_workers:
+                        trigger_rule = "scale_down"
+                    else:
+                        trigger_rule = "forecast"
+                else:
+                    self.forecast_online = False
+                    scaling_target = self.current_workers
+                    trigger_rule = "forecast_unavailable"
+                    if (t_mono - self.last_forecast_unavailable_log) >= 10.0:
+                        self.last_forecast_unavailable_log = t_mono
+                        log.warning("FORECAST_UNAVAILABLE: holding current workers (%d)", self.current_workers)
             else:
-                scaling_target = reactive_target
-                trigger_rule = "reactive"
+                # Scaling decision each second = max(reactive_target, predictive_target)
+                if predictive_target > reactive_target:
+                    scaling_target = predictive_target
+                    trigger_rule = "forecast"
+                elif reactive_target > self.current_workers:
+                    scaling_target = reactive_target
+                    trigger_rule = reactive_rule
+                else:
+                    scaling_target = reactive_target
+                    trigger_rule = "reactive"
 
         # Clip target to [2, 8]
         scaling_target = max(self.min_workers, min(self.max_workers, scaling_target))
@@ -434,11 +539,151 @@ class DemoController:
             self.scale_down_timer_start = None
             self.pending_scale_down_target = None
 
-        # 7. Apply scaling if triggered
+        # Check control file for live mode switch
+        if os.path.exists(self.control_path):
+            try:
+                with open(self.control_path, "r", encoding="utf-8") as f:
+                    ctrl_cfg = json.load(f)
+                    if "approval_mode" in ctrl_cfg:
+                        self.approval_mode = str(ctrl_cfg["approval_mode"]).lower()
+                    if "ask_before_release" in ctrl_cfg:
+                        self.ask_before_release = bool(ctrl_cfg["ask_before_release"])
+                    if "policy" in ctrl_cfg:
+                        p_val = str(ctrl_cfg["policy"]).lower()
+                        if p_val in ("hybrid", "predictive_only"):
+                            self.policy = p_val
+            except Exception:
+                pass
+
+        # Check approval file for operator decisions
+        approved_id = None
+        user_decision = None
+        if os.path.exists(self.approval_path):
+            try:
+                with open(self.approval_path, "r", encoding="utf-8") as f:
+                    appr_data = json.load(f)
+                    approved_id = appr_data.get("id")
+                    user_decision = appr_data.get("decision")
+            except Exception:
+                pass
+
+        # 7. Manual approval vs Auto execution
+        allow_immediate = True
         scale_event_info = None
-        if scale_action and target_to_apply and target_to_apply != self.current_workers:
+
+        if self.approval_mode == "manual":
+            # In manual mode, scale_up requires approval.
+            # scale_down stays automatic after 15s hysteresis UNLESS ask_before_release is true.
+            requires_approval = (scale_action == "scale_up") or (scale_action == "scale_down" and self.ask_before_release)
+
+            if requires_approval and target_to_apply and target_to_apply != self.current_workers:
+                allow_immediate = False
+                curr_id = (self.current_pending_proposal or {}).get("id")
+
+                if user_decision == "approve" and (not approved_id or approved_id == curr_id):
+                    # Operator approved! Apply the scaling action.
+                    allow_immediate = True
+                    if os.path.exists(self.pending_path):
+                        try:
+                            os.remove(self.pending_path)
+                        except Exception:
+                            pass
+                    if os.path.exists(self.approval_path):
+                        try:
+                            os.remove(self.approval_path)
+                        except Exception:
+                            pass
+                    self.current_pending_proposal = None
+                elif user_decision == "dismiss" and (not approved_id or approved_id == curr_id):
+                    # Operator dismissed! Do not re-propose same target for 20s.
+                    self.dismissed_targets[target_to_apply] = t_mono
+                    if os.path.exists(self.pending_path):
+                        try:
+                            os.remove(self.pending_path)
+                        except Exception:
+                            pass
+                    if os.path.exists(self.approval_path):
+                        try:
+                            os.remove(self.approval_path)
+                        except Exception:
+                            pass
+                    self.current_pending_proposal = None
+                    self.write_event(
+                        "SCALE_DISMISSED",
+                        "active_workers",
+                        target_to_apply,
+                        f"proposal dismissed by operator; target={target_to_apply}",
+                        timestamp=ts_iso,
+                    )
+                    log.info("SCALE PROPOSAL DISMISSED for target=%d (suppressed for 20s)", target_to_apply)
+                else:
+                    # Check if recently dismissed
+                    if target_to_apply in self.dismissed_targets and (t_mono - self.dismissed_targets[target_to_apply]) < 20.0:
+                        pass
+                    else:
+                        prop_id = curr_id or f"prop-{int(time.time() * 1000)}"
+                        fc_val = round(float(forecast_info.get("forecast", 0.0) if forecast_info else 0.0), 2)
+                        cap_val = round(float(self.current_workers * self.capacity_per_worker), 2)
+                        is_new_prop = (self.current_pending_proposal is None) or (self.current_pending_proposal.get("to_workers") != target_to_apply)
+
+                        self.current_pending_proposal = {
+                            "id": prop_id,
+                            "action": scale_action,
+                            "from_workers": self.current_workers,
+                            "to_workers": target_to_apply,
+                            "rule": trigger_rule,
+                            "forecast": fc_val,
+                            "capacity": cap_val,
+                            "util": round(float(smoothed_util), 2),
+                            "created_at": time.time(),
+                        }
+                        atomic_write_json(self.pending_path, self.current_pending_proposal)
+
+                        if is_new_prop:
+                            reason_prop = (
+                                f"rule={trigger_rule};from={self.current_workers};to={target_to_apply};"
+                                f"forecast={fc_val}rps;capacity={cap_val}rps;util={smoothed_util:.1f}%"
+                            )
+                            self.write_event(
+                                "SCALE_PROPOSED",
+                                "active_workers",
+                                target_to_apply,
+                                reason_prop,
+                                timestamp=ts_iso,
+                            )
+                            log.info("SCALE PROPOSED [MANUAL]: %d -> %d workers (%s)", self.current_workers, target_to_apply, reason_prop)
+
+            # Check if condition no longer needs scaling (proposal expired, load subsided)
+            if self.current_pending_proposal is not None:
+                prop_act = self.current_pending_proposal.get("action")
+                if prop_act == "scale_up" and scaling_target <= self.current_workers:
+                    if os.path.exists(self.pending_path):
+                        try:
+                            os.remove(self.pending_path)
+                        except Exception:
+                            pass
+                    self.write_event(
+                        "PROPOSAL_EXPIRED",
+                        "active_workers",
+                        self.current_workers,
+                        "proposal expired, load subsided",
+                        timestamp=ts_iso,
+                    )
+                    log.info("SCALE PROPOSAL EXPIRED: load subsided")
+                    self.current_pending_proposal = None
+        else:
+            # Auto mode: if pending file existed from earlier manual mode, clear it
+            if self.current_pending_proposal is not None or os.path.exists(self.pending_path):
+                if os.path.exists(self.pending_path):
+                    try:
+                        os.remove(self.pending_path)
+                    except Exception:
+                        pass
+                self.current_pending_proposal = None
+
+        # 8. Apply scaling if triggered and allowed
+        if allow_immediate and scale_action and target_to_apply and target_to_apply != self.current_workers:
             util_before = smoothed_util
-            # Request resize from collector
             applied_workers = self.apply_capacity(target_to_apply)
             util_after = self.compute_pool_utilization(worker_cpu_pct, applied_workers)
 
@@ -476,6 +721,8 @@ class DemoController:
         res = {
             "timestamp": ts_iso,
             "mode": self.mode,
+            "policy": self.policy,
+            "approval_mode": self.approval_mode,
             "current_workers": self.current_workers,
             "raw_util": round(raw_util, 2),
             "smoothed_util": round(smoothed_util, 2),
@@ -489,12 +736,16 @@ class DemoController:
             "chosen_target": scaling_target,
             "trigger_rule": trigger_rule,
             "scale_event": scale_event_info,
+            "pending_proposal": self.current_pending_proposal,
         }
         try:
-            with open(self.state_path, "w", encoding="utf-8") as f:
-                json.dump(res, f)
+            atomic_write_json(self.state_path, res)
         except Exception:
-            pass
+            try:
+                with open(self.state_path, "w", encoding="utf-8") as f:
+                    json.dump(res, f)
+            except Exception:
+                pass
 
         # Write controller_status.json (mode, forecast_online, last_decision, time)
         last_decision = {
@@ -502,6 +753,7 @@ class DemoController:
             "target": int(scaling_target),
             "rule": str(trigger_rule),
             "current_workers": int(self.current_workers),
+            "policy": self.policy,
         }
         status_payload = {
             "mode": self.mode,
@@ -509,11 +761,34 @@ class DemoController:
             "last_decision": last_decision,
             "time": ts_iso,
         }
+        if self.policy and self.policy != "hybrid":
+            status_payload["policy"] = self.policy
         try:
-            with open(self.status_path, "w", encoding="utf-8") as f:
-                json.dump(status_payload, f, indent=2)
+            atomic_write_json(self.status_path, status_payload)
         except Exception as exc:
-            log.debug("Failed writing %s: %s", self.status_path, exc)
+            try:
+                with open(self.status_path, "w", encoding="utf-8") as f:
+                    json.dump(status_payload, f, indent=2)
+            except Exception:
+                log.debug("Failed writing %s: %s", self.status_path, exc)
+
+        # Write per-second trace row
+        trace_row = {
+            "t": round(t_mono - self.start_monotonic, 2),
+            "arrivals": round(arrivals, 2),
+            "smoothed_arrivals": round(smoothed_arrivals, 2),
+            "forecast_raw": round(float(forecast_info.get("forecast", 0.0) if forecast_info else 0.0), 3),
+            "forecast_upper": round(float(forecast_info.get("upper_bound", 0.0) if forecast_info else 0.0), 3),
+            "horizon": int(forecast_info.get("horizon_sec", 20) if forecast_info else 20),
+            "reactive_target": reactive_target,
+            "predictive_target": predictive_target,
+            "chosen_target": scaling_target,
+            "workers": self.current_workers,
+            "util": round(smoothed_util, 2),
+            "approval_mode": self.approval_mode,
+            "forecast_online": bool(self.forecast_online),
+        }
+        self.write_trace_row(trace_row)
 
         return res
 
@@ -618,6 +893,12 @@ def main():
         help="Scaling mode: 'predictive', 'reactive', or 'capacity_aware'",
     )
     parser.add_argument(
+        "--policy",
+        choices=["hybrid", "predictive_only"],
+        default="hybrid",
+        help="Predictive policy: 'hybrid' (default) or 'predictive_only'",
+    )
+    parser.add_argument(
         "--initial-workers",
         type=int,
         default=2,
@@ -654,6 +935,12 @@ def main():
         help="Path to controller_status.json",
     )
     parser.add_argument(
+        "--approval",
+        choices=["auto", "manual"],
+        default="auto",
+        help="Approval mode for scaling: 'auto' (default) or 'manual'",
+    )
+    parser.add_argument(
         "--duration",
         type=float,
         default=0.0,
@@ -663,12 +950,14 @@ def main():
 
     controller = DemoController(
         mode=args.mode,
+        policy=args.policy,
         initial_workers=args.initial_workers,
         collector_url=args.collector_url,
         inference_url=args.inference_url,
         calibration_path=args.calibration,
         csv_path=args.csv,
         status_path=args.status,
+        approval=args.approval,
     )
     controller.run_loop(duration_sec=args.duration)
 

@@ -1,0 +1,32 @@
+[
+  {
+    "profile": "ramp",
+    "total_rows": 133,
+    "first_scale_up_t": 10.02,
+    "first_scale_up_workers": 3,
+    "load_change_t": 8.02,
+    "scaled_before_load_change": false,
+    "workers_timeline": [
+      [
+        0.01,
+        2
+      ],
+      [
+        10.02,
+        3
+      ],
+      [
+        18.02,
+        5
+      ],
+      [
+        28.02,
+        7
+      ],
+      [
+        33.02,
+        8
+      ]
+    ]
+  }
+]

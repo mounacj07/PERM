@@ -1,163 +1,347 @@
 {% extends "base.html" %}
-{% block title %}PERM — Overview{% endblock %}
-{% block page_title %}System Overview{% endblock %}
+{% block title %}PERM — Live Ops Console{% endblock %}
+{% block page_title %}Live Edge Ops Console{% endblock %}
 
 {% block content %}
-<!-- KPI Cards Row (D5: Max 5 per row, equal height, big value, small label, 60s min/max sub-line, status dot) -->
-<div class="kpi-grid">
-  <!-- 1. Active Workers -->
-  <div class="kpi-card">
-    <div class="kpi-header">
-      <span class="kpi-title">Active Workers</span>
-      <span class="kpi-status-dot status-workers" id="dot-workers"></span>
-    </div>
-    <div class="kpi-value text-workers" id="kpi-val-workers">2 / 8</div>
-    <div class="kpi-subline">
-      <span id="kpi-sub-workers">60s min: 2 &bull; max: 2</span>
-    </div>
-  </div>
-
-  <!-- 2. Arrival Rate -->
-  <div class="kpi-card">
-    <div class="kpi-header">
-      <span class="kpi-title">Arrival Rate</span>
-      <span class="kpi-status-dot status-traffic" id="dot-arrivals"></span>
-    </div>
-    <div class="kpi-value text-traffic" id="kpi-val-arrivals">0.0 <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">req/s</span></div>
-    <div class="kpi-subline">
-      <span id="kpi-sub-arrivals">60s min: 0.0 &bull; max: 0.0</span>
+<div class="live-viewport-container">
+  <!-- Predictive Offline Fallback Banner (H1) -->
+  <div id="predictiveFallbackBanner" class="alert-banner alert-banner-danger" style="display:none; margin-bottom: var(--space-3); border: 1px solid var(--color-crit); background: rgba(239, 68, 68, 0.1); border-radius: var(--radius-sm); padding: 8px 12px;">
+    <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:var(--space-2);">
+      <div style="flex:1;">
+        <div style="font-weight:700; color:var(--color-crit); font-size:0.85rem;">
+          Predictive mode is running WITHOUT forecasts (inference offline); behaving as reactive
+        </div>
+        <pre id="predictiveFallbackLogs" class="mono" style="margin-top:6px; font-size:0.72rem; color:var(--text-1); white-space:pre-wrap; max-height:90px; overflow-y:auto; background:rgba(0,0,0,0.4); padding:6px 8px; border-radius:4px; border:1px solid rgba(239, 68, 68, 0.2);"></pre>
+      </div>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('predictiveFallbackBanner').style.display='none'" style="color:var(--text-muted); cursor:pointer;">&times;</button>
     </div>
   </div>
 
-  <!-- 3. P95 Latency -->
-  <div class="kpi-card">
-    <div class="kpi-header">
-      <span class="kpi-title">P95 Latency</span>
-      <span class="kpi-status-dot status-ok" id="dot-p95"></span>
+  <!-- 1. Mini Launcher Bar on Live Page -->
+  <div class="live-mini-launcher">
+    <div class="mini-launcher-controls">
+      <span style="font-size:0.75rem; font-weight:700; color:var(--text-1);">DEMO RUNNER:</span>
+      <select id="miniProfileSelect" class="select-input-sm" title="Select scenario workload profile">
+        <option value="spike" selected>Spike Profile (80s)</option>
+        <option value="step">Step Profile (65s)</option>
+        <option value="ramp">Ramp Profile (135s)</option>
+        <option value="ramp_burst">Ramp Burst (Precursor, 90s)</option>
+        <option value="double_burst">Double Burst (130s)</option>
+        <option value="random_walk">Random Walk (125s)</option>
+        <option value="random_mix">Random Mix (125s)</option>
+      </select>
+
+      <select id="miniCtrlModeSelect" class="select-input-sm" title="Select demo controller mode and policy">
+        <option value="predictive_only" selected>Predictive only (ST-AGBDT)</option>
+        <option value="hybrid">Hybrid (forecast + reactive safety net)</option>
+        <option value="reactive">Reactive</option>
+        <option value="capacity_aware">Capacity-aware</option>
+      </select>
+
+      <select id="miniApprovalSelect" class="select-input-sm" title="Select controller approval mode">
+        <option value="auto" selected>Auto Scaling</option>
+        <option value="manual">Manual Scaling</option>
+      </select>
+
+      <label class="checkbox-label-sm" title="Automatically scale workers during run">
+        <input type="checkbox" id="miniRunWithCtrl" checked />
+        <span>Scale Workers</span>
+      </label>
+
+      <button type="button" id="miniStartBtn" class="btn btn-primary btn-sm" onclick="PERM.miniLaunch()">
+        &blacktriangleright; Start Run
+      </button>
+      <button type="button" id="miniStopBtn" class="btn btn-danger btn-sm" style="display:none;" onclick="PERM.miniStop()">
+        &block; Stop
+      </button>
     </div>
-    <div class="kpi-value text-ok" id="kpi-val-p95">-- <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">ms</span></div>
-    <div class="kpi-subline">
-      <span id="kpi-sub-p95">60s min: -- &bull; max: --</span>
+
+    <div style="display:flex; align-items:center; gap:var(--space-2);">
+      <span id="miniPhaseBadge" class="status-badge" style="display:none;">CALM PHASE</span>
+      <span id="miniStatusBadge" class="status-badge status-badge-idle">IDLE</span>
+      <div class="mini-progress-track" title="Scenario Progress">
+        <div id="miniProgressBar" class="mini-progress-fill"></div>
+      </div>
+      <span id="miniTimerText" class="mono num" style="font-size:0.75rem; color:var(--text-muted); min-width:65px; text-align:right;">0.0s / 0s</span>
     </div>
   </div>
 
-  <!-- 4. Queue Depth -->
-  <div class="kpi-card">
-    <div class="kpi-header">
-      <span class="kpi-title">Queue Depth</span>
-      <span class="kpi-status-dot status-ok" id="dot-queue"></span>
+  <!-- 2. KPI Strip: 5 Compact Cards (~72px tall, 1 row) -->
+  <div class="kpi-strip">
+    <!-- Active Workers -->
+    <div class="kpi-card-compact">
+      <div class="kpi-header">
+        <span class="kpi-title">Active Workers</span>
+        <span class="kpi-status-dot status-workers" id="dot-workers"></span>
+      </div>
+      <div class="kpi-value text-workers" id="kpi-val-workers">2 / 8</div>
+      <div class="kpi-subline">
+        <span id="kpi-sub-workers">60s min: 2 &bull; max: 2</span>
+      </div>
     </div>
-    <div class="kpi-value" id="kpi-val-queue">0 <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">/ 20</span></div>
-    <div class="kpi-subline">
-      <span id="kpi-sub-queue">60s min: 0 &bull; max: 0</span>
+
+    <!-- Arrival Rate -->
+    <div class="kpi-card-compact">
+      <div class="kpi-header">
+        <span class="kpi-title">Arrival Rate</span>
+        <span class="kpi-status-dot status-traffic" id="dot-arrivals"></span>
+      </div>
+      <div class="kpi-value text-traffic" id="kpi-val-arrivals">0.0 <span style="font-size:0.75rem; font-weight:400; color:var(--text-2);">req/s</span></div>
+      <div class="kpi-subline">
+        <span id="kpi-sub-arrivals">60s min: 0.0 &bull; max: 0.0</span>
+      </div>
+    </div>
+
+    <!-- P95 Latency -->
+    <div class="kpi-card-compact">
+      <div class="kpi-header">
+        <span class="kpi-title">P95 Latency</span>
+        <span class="kpi-status-dot status-ok" id="dot-p95"></span>
+      </div>
+      <div class="kpi-value text-ok" id="kpi-val-p95">-- <span style="font-size:0.75rem; font-weight:400; color:var(--text-2);">ms</span></div>
+      <div class="kpi-subline">
+        <span id="kpi-sub-p95">60s min: -- &bull; max: --</span>
+      </div>
+    </div>
+
+    <!-- Queue Depth -->
+    <div class="kpi-card-compact">
+      <div class="kpi-header">
+        <span class="kpi-title">Queue Depth</span>
+        <span class="kpi-status-dot status-ok" id="dot-queue"></span>
+      </div>
+      <div class="kpi-value" id="kpi-val-queue">0 <span style="font-size:0.75rem; font-weight:400; color:var(--text-2);">/ 20</span></div>
+      <div class="kpi-subline">
+        <span id="kpi-sub-queue">60s min: 0 &bull; max: 0</span>
+      </div>
+    </div>
+
+    <!-- Failed Requests -->
+    <div class="kpi-card-compact">
+      <div class="kpi-header">
+        <span class="kpi-title">Failed Requests</span>
+        <span class="kpi-status-dot status-ok" id="dot-fails"></span>
+      </div>
+      <div class="kpi-value" id="kpi-val-fails">0</div>
+      <div class="kpi-subline">
+        <span id="kpi-sub-fails">Cumulative drops / timeouts</span>
+      </div>
     </div>
   </div>
 
-  <!-- 5. Failed Requests -->
-  <div class="kpi-card">
-    <div class="kpi-header">
-      <span class="kpi-title">Failed Requests</span>
-      <span class="kpi-status-dot status-ok" id="dot-fails"></span>
-    </div>
-    <div class="kpi-value" id="kpi-val-fails">0</div>
-    <div class="kpi-subline">
-      <span id="kpi-sub-fails">Cumulative drops / timeouts</span>
+  <!-- 3. Prominent Amber Banner for Pending Operator Scaling Proposal -->
+  <div id="pendingProposalBanner" class="pending-proposal-banner" style="display:none;">
+    <div class="pending-banner-content">
+      <div class="pending-banner-icon">&excl;</div>
+      <div class="pending-banner-details">
+        <div class="pending-banner-title">
+          <strong>SCALING PROPOSAL PENDING OPERATOR APPROVAL</strong>
+          <span id="pendingTimerBadge" class="pending-timer-badge">0s</span>
+        </div>
+        <div id="pendingBannerText" class="pending-banner-text">
+          Forecast -- req/s in ~20s vs capacity -- req/s. Recommend -- -> -- workers.
+        </div>
+      </div>
+      <div class="pending-banner-actions">
+        <button type="button" id="btnApproveProposal" class="btn btn-sm btn-primary" onclick="PERM.approveProposal()">
+          &check; Approve
+        </button>
+        <button type="button" id="btnDismissProposal" class="btn btn-sm btn-secondary" onclick="PERM.dismissProposal()">
+          &times; Dismiss
+        </button>
+      </div>
     </div>
   </div>
-</div>
 
-<!-- D3: Overview Hero Chart "Traffic vs capacity" -->
-<div class="card" style="margin-bottom: var(--space-3);">
-  <div class="card-header">
-    <div>
-      <span class="card-title">Traffic Demand vs. Provisioned Capacity</span>
-      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-        Bars: Arrival Rate (req/s) &bull; Solid Line: Effective Capacity (Workers &times; 7.89 req/s) &bull; Stepped Line: Active Workers (Right Axis)
-      </span>
+  <!-- Run Summary Card (P2) -->
+  <div id="runSummaryCard" class="card run-summary-card" style="display:none; margin-bottom: var(--space-3); border-color: rgba(56, 189, 248, 0.4); background: rgba(15, 23, 42, 0.95); padding: 12px 16px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span class="status-badge status-badge-ok">RUN FINISHED</span>
+        <h3 style="margin:0; font-size:0.95rem; font-weight:700; color:var(--text-1);">Run Performance Summary</h3>
+      </div>
+      <button type="button" class="btn btn-sm btn-ghost" onclick="document.getElementById('runSummaryCard').style.display='none'" style="color:var(--text-muted); cursor:pointer;">&times;</button>
     </div>
-    <div>
-      <span id="hero-status-pill" class="status-badge status-badge-ok">CAPACITY SUFFICIENT</span>
+    <div class="summary-metrics-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px;">
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Burst Onset Time</div>
+        <div class="kpi-value mono" style="font-size:1.05rem;" id="sum-burst-onset">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">First Scale-Up Time</div>
+        <div class="kpi-value mono" style="font-size:1.05rem;" id="sum-first-scale">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Lead Time</div>
+        <div class="kpi-value mono" style="font-size:1.05rem;" id="sum-lead-time">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Peak Workers</div>
+        <div class="kpi-value mono text-workers" style="font-size:1.05rem;" id="sum-peak-workers">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Worker-Seconds</div>
+        <div class="kpi-value mono" style="font-size:1.05rem;" id="sum-worker-seconds">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Over-Provision Ratio</div>
+        <div class="kpi-value mono" style="font-size:1.05rem;" id="sum-overprovision">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Seconds Util > 85%</div>
+        <div class="kpi-value mono text-crit" style="font-size:1.05rem;" id="sum-util-85">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Seconds Queue &ge; 15</div>
+        <div class="kpi-value mono text-warn" style="font-size:1.05rem;" id="sum-queue-15">—</div>
+      </div>
+      <div class="kpi-card-compact" style="background:var(--bg-1); padding:8px 10px;">
+        <div class="caption">Dropped Requests</div>
+        <div class="kpi-value mono" style="font-size:1.05rem;" id="sum-dropped">—</div>
+      </div>
     </div>
   </div>
-  <div class="chart-wrapper">
-    <div class="chart-empty-overlay">
-      <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
-    </div>
-    <canvas id="chart-hero-traffic"></canvas>
-  </div>
-</div>
 
-<!-- Dual Secondary Charts (Latency with 300ms SLO Breach Zone & Pool Utilization with 70%/85% Bands) -->
-<div class="grid-2col" style="margin-bottom: var(--space-3);">
-  <!-- P95 Latency -->
-  <div class="card">
+  <!-- 4. Main Live Charts Grid (Hero Left ~60%, Stacked Right ~40%) -->
+  <div class="live-charts-grid">
+    <!-- Hero Chart: Traffic vs Capacity -->
+    <div class="card live-chart-hero">
+      <div class="card-header">
+        <div>
+          <span class="card-title">Traffic Demand vs. Provisioned Capacity</span>
+          <span style="display:block; font-size:0.72rem; color:var(--text-muted); margin-top:1px;">
+            Bars: Actual Arrivals (req/s) &bull; Dashed Line: Capacity (Workers &times; Cap/Worker) &bull; Dotted: ST-AGBDT Forecast
+          </span>
+        </div>
+        <div style="display:flex; align-items:center; gap:var(--space-2);">
+          <label style="display:inline-flex; align-items:center; gap:5px; font-size:0.75rem; color:var(--text-2); cursor:pointer;" title="Thin grey step line: ceil(smoothed actual arrivals / capacity_per_worker) * capacity_per_worker">
+            <input type="checkbox" id="toggleNeededCapacity" checked style="cursor:pointer;" onchange="PERM.toggleNeededCapacity(this.checked)">
+            <span>Needed capacity (hindsight)</span>
+          </label>
+          <span id="hero-status-pill" class="status-badge status-badge-ok">CAPACITY SUFFICIENT</span>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <div class="chart-empty-overlay">
+          <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments">Scenario launcher</a> or using the bar above.</span>
+        </div>
+        <canvas id="chart-hero-traffic"></canvas>
+      </div>
+
+      <!-- Forecast Accuracy Strip (P2) -->
+      <div class="forecast-accuracy-strip" id="forecastAccuracyStrip" style="margin-top:8px; padding:6px 12px; background:var(--bg-2); border-radius:var(--radius-sm); border:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; font-size:0.75rem;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-weight:700; color:var(--text-1); font-size:0.72rem; letter-spacing:0.02em;">FORECAST ACCURACY (last 30 matured):</span>
+          <span style="color:var(--text-2);">MAE: <strong id="accStripMAE" class="mono" style="color:var(--text-1);">n/a</strong></span>
+          <span style="color:var(--border);">|</span>
+          <span style="color:var(--text-2);">Bias: <strong id="accStripBias" class="mono" style="color:var(--text-1);">n/a</strong></span>
+        </div>
+        <span style="color:var(--text-muted); font-size:0.7rem;" class="mono" id="accStripCount">(0 matured)</span>
+      </div>
+    </div>
+
+    <!-- Right Column: Stacked P95 Latency & Pool Utilization -->
+    <div class="live-chart-stack">
+      <!-- P95 Latency -->
+      <div class="card live-subchart-box">
+        <div class="card-header">
+          <div>
+            <span class="card-title">P95 Response Latency (SLO 300ms)</span>
+            <span style="display:block; font-size:0.72rem; color:var(--text-muted);">
+              Rolling 90s window with shaded 300ms breach zone &bull; Gaps = No requests
+            </span>
+          </div>
+          <span id="latency-slo-badge" class="status-badge status-badge-ok">WITHIN SLO</span>
+        </div>
+        <div class="chart-wrapper">
+          <div class="chart-empty-overlay">
+            <span>No live traffic. Collector offline.</span>
+          </div>
+          <canvas id="chart-overview-lat"></canvas>
+        </div>
+      </div>
+
+      <!-- Pool Utilization -->
+      <div class="card live-subchart-box">
+        <div class="card-header">
+          <div>
+            <span class="card-title">Pool Utilization (% Active Workers)</span>
+            <span style="display:block; font-size:0.72rem; color:var(--text-muted);">
+              Warning band (70%–85%) &bull; Critical band (&ge;85%)
+            </span>
+          </div>
+          <span id="util-badge" class="status-badge status-badge-ok">NORMAL</span>
+        </div>
+        <div class="chart-wrapper">
+          <div class="chart-empty-overlay">
+            <span>No live traffic. Collector offline.</span>
+          </div>
+          <canvas id="chart-overview-util"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. Event Feed Compact Strip (4-row strip with "Show All" toggle) -->
+  <div class="event-feed-compact">
     <div class="card-header">
+      <div style="display:flex; align-items:center; gap:var(--space-2);">
+        <span class="card-title" style="font-size:0.85rem;">Controller Scaling &amp; Alert Event Feed</span>
+        <span class="mono" style="font-size:0.72rem; color:var(--text-muted);" id="events-count-label">0 events</span>
+      </div>
       <div>
-        <span class="card-title">P95 Response Latency (SLO 300ms)</span>
-        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-          Rolling 90s window with shaded 300ms breach zone
-        </span>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleAllEventsModal()" style="padding:2px 8px; font-size:0.7rem;">Show All</button>
       </div>
-      <span id="latency-slo-badge" class="status-badge status-badge-ok">WITHIN SLO</span>
     </div>
-    <div class="chart-wrapper">
-      <div class="chart-empty-overlay">
-        <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
-      </div>
-      <canvas id="chart-overview-lat"></canvas>
-    </div>
-  </div>
-
-  <!-- Pool Utilization -->
-  <div class="card">
-    <div class="card-header">
-      <div>
-        <span class="card-title">Pool Utilization (% of Active Workers)</span>
-        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-          Shaded warning band (70%–85%) &amp; critical band (&ge;85%)
-        </span>
-      </div>
-      <span id="util-badge" class="status-badge status-badge-ok">NORMAL</span>
-    </div>
-    <div class="chart-wrapper">
-      <div class="chart-empty-overlay">
-        <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
-      </div>
-      <canvas id="chart-overview-util"></canvas>
+    <div class="event-feed-table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 120px;">Time</th>
+            <th style="width: 110px;">Event</th>
+            <th style="width: 130px;">Signal / Metric</th>
+            <th style="width: 150px;">Action / Workers</th>
+            <th>Trigger Reason &amp; Rule</th>
+          </tr>
+        </thead>
+        <tbody id="events-table-body">
+          <tr>
+            <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 8px;">
+              No scaling or alert events recorded in current run.
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </div>
 </div>
 
-<!-- D6: Event Feed Panel (Last 10 controller events with colored badges and relative times) -->
-<div class="card">
-  <div class="card-header">
-    <div>
-      <span class="card-title">Controller Scaling &amp; Alert Event Feed</span>
-      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-        Audit trail of automatic worker adjustments and utilization threshold crossings
-      </span>
+<!-- All Events Modal -->
+<div class="modal-backdrop" id="allEventsModal" style="display:none;" onclick="if(event.target===this) toggleAllEventsModal()">
+  <div class="modal-box" style="max-width:850px; max-height:80vh; display:flex; flex-direction:column;">
+    <div class="modal-header">
+      <h3>All Controller Scaling &amp; Alert Events</h3>
+      <button class="modal-close-btn" onclick="toggleAllEventsModal()">&times;</button>
     </div>
-    <span class="mono" style="font-size:0.75rem; color:var(--text-muted);" id="events-count-label">0 events</span>
-  </div>
-  <div style="overflow-x: auto;">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th style="width: 140px;">Time</th>
-          <th style="width: 130px;">Event Type</th>
-          <th style="width: 140px;">Signal / Metric</th>
-          <th style="width: 160px;">Action / Workers</th>
-          <th>Trigger Reason &amp; Rule</th>
-        </tr>
-      </thead>
-      <tbody id="events-table-body">
-        <tr>
-          <td colspan="5" style="text-align: center; color: var(--text-muted); padding: var(--space-4);">
-            No scaling or alert events recorded in current run.
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="modal-body" style="flex:1; overflow-y:auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th style="width: 130px;">Time</th>
+            <th style="width: 120px;">Event Type</th>
+            <th style="width: 140px;">Signal / Metric</th>
+            <th style="width: 150px;">Action</th>
+            <th>Reason &amp; Rule</th>
+          </tr>
+        </thead>
+        <tbody id="all-events-table-body">
+          <tr><td colspan="5" style="text-align:center; color:var(--text-muted); padding:16px;">No events recorded.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary btn-sm" onclick="toggleAllEventsModal()">Close</button>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -167,10 +351,54 @@
 let heroChart = null;
 let latChart = null;
 let utilChart = null;
+let cachedControllerEvents = [];
+
+function toggleAllEventsModal() {
+  const modal = document.getElementById('allEventsModal');
+  if (!modal) return;
+  const isHidden = modal.style.display === 'none';
+  modal.style.display = isHidden ? 'flex' : 'none';
+  if (isHidden) {
+    renderAllEventsTable(cachedControllerEvents);
+  }
+}
+
+function renderAllEventsTable(events) {
+  const tbody = document.getElementById('all-events-table-body');
+  if (!tbody) return;
+  if (!events || events.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 16px;">No scaling or alert events recorded.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = events.slice().reverse().map(evt => {
+    let badgeClass = 'status-badge status-badge-ok';
+    let typeName = evt.type || 'INFO';
+    if (typeName === 'CRITICAL' || typeName === 'SCALE_DOWN') {
+      badgeClass = 'status-badge status-badge-crit';
+    } else if (typeName === 'WARN' || typeName === 'SCALE_UP' || typeName === 'SCALE_PROPOSED') {
+      badgeClass = 'status-badge status-badge-warn';
+    }
+    const timeStr = evt.time ? PERM.formatTime(evt.time) : '--:--:--';
+    const relStr = evt.time ? ` (${PERM.formatRelativeTime(evt.time)})` : '';
+    const signal = evt.signal ? `<span class="mono">${PERM.escapeHtml(evt.signal)}</span>` : '—';
+    const val = evt.value !== undefined ? `<span class="mono">${typeof evt.value === 'number' ? evt.value.toFixed(1) : evt.value}</span>` : '—';
+    const reason = PERM.escapeHtml(evt.reason || '—');
+
+    return `
+      <tr>
+        <td class="mono">${timeStr}<span style="color:var(--text-muted); font-size:0.7rem;">${relStr}</span></td>
+        <td><span class="${badgeClass}">${typeName}</span></td>
+        <td>${signal} = ${val}</td>
+        <td class="mono" style="font-weight:600; color:var(--text-workers);">${PERM.escapeHtml(evt.action || evt.signal || '—')}</td>
+        <td style="font-size:0.8rem; color:var(--text-1);">${reason}</td>
+      </tr>
+    `;
+  }).join('');
+}
 
 // Initialize Overview Charts
 function initOverviewCharts() {
-  // 1. Hero Chart: Traffic vs Capacity
+  // 1. Hero Chart: Traffic vs Capacity (Left Axis only req/s, Arrivals Bar, Stepped Capacity, Pink Forecast, Translucent Band)
   const ctxHero = document.getElementById('chart-hero-traffic').getContext('2d');
   heroChart = new Chart(ctxHero, {
     type: 'bar',
@@ -185,30 +413,64 @@ function initOverviewCharts() {
           borderColor: '#0284c7',
           borderWidth: 1,
           barPercentage: 0.8,
+          order: 3,
           yAxisID: 'y'
         },
         {
           type: 'line',
-          label: 'Capacity (Workers × 7.89 req/s)',
+          label: 'Capacity (req/s)',
           data: [],
           borderColor: '#a78bfa',
           borderWidth: 2,
           borderDash: [5, 4],
+          stepped: true,
           pointRadius: 0,
           fill: false,
-          tension: 0,
+          order: 2,
           yAxisID: 'y'
         },
         {
           type: 'line',
-          label: 'Active Workers',
+          label: 'Forecast',
           data: [],
-          borderColor: '#8b5cf6',
-          borderWidth: 2.5,
+          borderColor: '#f472b6',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          pointBackgroundColor: '#f472b6',
+          pointBorderColor: '#ffffff',
+          pointBorderWidth: 1,
+          fill: false,
+          spanGaps: true,
+          order: 1,
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: 'Upper bound (used for scaling)',
+          data: [],
+          borderColor: 'rgba(244, 114, 182, 0.5)',
+          borderWidth: 1,
+          borderDash: [3, 3],
+          pointRadius: 0,
+          fill: '-1',
+          backgroundColor: 'rgba(244, 114, 182, 0.15)',
+          spanGaps: true,
+          order: 1,
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: 'Needed capacity (hindsight)',
+          data: [],
+          borderColor: '#71717a',
+          borderWidth: 1.5,
+          borderDash: [3, 3],
           stepped: true,
           pointRadius: 0,
           fill: false,
-          yAxisID: 'y1'
+          order: 4,
+          yAxisID: 'y'
         }
       ]
     },
@@ -216,28 +478,62 @@ function initOverviewCharts() {
       scales: {
         x: {
           grid: { color: 'rgba(255, 255, 255, 0.04)', drawBorder: false },
-          ticks: { color: '#71717a', font: { size: 10 }, maxTicksLimit: 8, maxRotation: 0 }
+          ticks: { color: '#71717a', font: { size: 9 }, maxTicksLimit: 9, maxRotation: 0 }
         },
         y: {
           position: 'left',
-          title: { display: true, text: 'Req / sec', color: '#71717a', font: { size: 10 } },
+          title: { display: true, text: 'Req / sec', color: '#71717a', font: { size: 9 } },
           grid: { color: 'rgba(255, 255, 255, 0.05)', drawBorder: false },
-          ticks: { color: '#71717a', font: { size: 10 } },
+          ticks: { color: '#71717a', font: { size: 9 } },
           min: 0
+        }
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            color: '#a1a1aa',
+            font: { size: 9 },
+            filter: function(item) {
+              return true;
+            }
+          }
         },
-        y1: {
-          position: 'right',
-          title: { display: true, text: 'Workers', color: '#71717a', font: { size: 10 } },
-          grid: { drawOnChartArea: false },
-          ticks: { color: '#8b5cf6', font: { size: 10 }, stepSize: 1 },
-          min: 0,
-          max: 8
+        tooltip: {
+          callbacks: {
+            label: function(context) {
+              const dsIdx = context.datasetIndex;
+              const idx = context.dataIndex;
+              const val = context.parsed.y;
+              if (val === null || val === undefined) return null;
+              const name = context.dataset.label;
+              if (dsIdx === 2 || dsIdx === 3) {
+                const meta = (window._heroForecastMeta && window._heroForecastMeta[idx]) || null;
+                const forTime = context.label;
+                if (meta && meta.madeAt) {
+                  return `${name}: ${val.toFixed(1)} req/s (made at ${meta.madeAt} for ${meta.forTime || forTime})`;
+                }
+                return `${name}: ${val.toFixed(1)} req/s`;
+              }
+              if (dsIdx === 4) {
+                return `${name}: ${val.toFixed(1)} req/s`;
+              }
+              return `${name}: ${typeof val === 'number' ? val.toFixed(1) : val}`;
+            }
+          }
+        },
+        permAnnotations: {
+          verticalMarkers: [],
+          futureRegion: null
         }
       }
     })
   });
 
-  // 2. Latency Chart with 300ms SLO Breach Zone
+  // 2. Latency Chart with 300ms SLO Breach Zone (Gaps as null)
   const ctxLat = document.getElementById('chart-overview-lat').getContext('2d');
   latChart = new Chart(ctxLat, {
     type: 'line',
@@ -252,16 +548,21 @@ function initOverviewCharts() {
           borderWidth: 2,
           pointRadius: 0,
           tension: 0.2,
-          fill: true
+          fill: true,
+          spanGaps: false
         }
       ]
     },
     options: PERM.createStandardChartOptions({
       scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.04)' },
+          ticks: { color: '#71717a', font: { size: 9 }, maxTicksLimit: 6, maxRotation: 0 }
+        },
         y: {
           min: 0,
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          ticks: { color: '#71717a', font: { size: 10 } }
+          ticks: { color: '#71717a', font: { size: 9 } }
         }
       },
       plugins: {
@@ -298,11 +599,15 @@ function initOverviewCharts() {
     },
     options: PERM.createStandardChartOptions({
       scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.04)' },
+          ticks: { color: '#71717a', font: { size: 9 }, maxTicksLimit: 6, maxRotation: 0 }
+        },
         y: {
           min: 0,
           max: 100,
           grid: { color: 'rgba(255, 255, 255, 0.05)' },
-          ticks: { color: '#71717a', font: { size: 10 } }
+          ticks: { color: '#71717a', font: { size: 9 } }
         }
       },
       plugins: {
@@ -324,11 +629,20 @@ function initOverviewCharts() {
 // Global page update hook invoked on every poll by PERM
 window.PERM_PAGE_UPDATE = function(data) {
   const telem = data.telemetry_latest || {};
-  const history = data.history || [];
+  const history = data.history || data.telemetry_history || [];
   const ctrlEvents = data.controller_events || [];
+  cachedControllerEvents = ctrlEvents;
 
   // 1. Controller Mode Label in Sidebar
-  const modeLabel = data.mode_label || (data.controller_state && data.controller_state.mode ? `Demo controller: ${data.controller_state.mode}` : 'Controller not running');
+  let modeLabel = 'Controller not running';
+  if (data.mode_label) {
+    modeLabel = data.mode_label;
+  } else if (data.controller_state && data.controller_state.mode) {
+    const cs = data.controller_state;
+    const policy = cs.policy || (cs.mode === 'predictive' ? 'hybrid' : cs.mode);
+    const online = (data.controller_status && !data.controller_status.forecast_online) ? 'offline' : 'online';
+    modeLabel = `Demo controller: ${policy} (${online})`;
+  }
   const elMode = document.getElementById('global-mode-label');
   if (elMode) elMode.innerText = modeLabel;
 
@@ -337,28 +651,35 @@ window.PERM_PAGE_UPDATE = function(data) {
   const elWorkers = document.getElementById('kpi-val-workers');
   if (elWorkers) elWorkers.innerText = `${workers} / 8`;
 
-  // 3. Arrivals KPI
-  const arrivals = telem.arrival_rate_req_per_s !== undefined ? telem.arrival_rate_req_per_s : 0.0;
+  // 3. Arrivals KPI (Support arrivals_count and aliases)
+  const arrivals = telem.arrivals_count !== undefined ? telem.arrivals_count : (telem.arrival_rate_req_per_s !== undefined ? telem.arrival_rate_req_per_s : (data.arrivals || 0.0));
   const elArr = document.getElementById('kpi-val-arrivals');
-  if (elArr) elArr.innerHTML = `${arrivals.toFixed(1)} <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">req/s</span>`;
+  if (elArr) elArr.innerHTML = `${arrivals.toFixed(1)} <span style="font-size:0.75rem; font-weight:400; color:var(--text-2);">req/s</span>`;
 
-  // 4. P95 Latency KPI
-  const p95 = telem.p95_latency_ms !== undefined ? telem.p95_latency_ms : (telem.avg_latency_ms !== undefined ? telem.avg_latency_ms : null);
+  // 4. P95 Latency KPI (Show -- if single-second gap with no requests completed)
+  const p95 = (telem.p95_latency_ms !== null && telem.p95_latency_ms !== undefined && telem.p95_latency_ms > 0) ? telem.p95_latency_ms : null;
   const elP95 = document.getElementById('kpi-val-p95');
   const dotP95 = document.getElementById('dot-p95');
   const latBadge = document.getElementById('latency-slo-badge');
-  if (elP95 && p95 !== null) {
-    elP95.innerHTML = `${p95.toFixed(1)} <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">ms</span>`;
-    if (p95 >= 300) {
-      elP95.className = 'kpi-value text-crit';
-      if (dotP95) dotP95.className = 'kpi-status-dot status-crit';
-      if (latBadge) { latBadge.className = 'status-badge status-badge-crit'; latBadge.innerText = 'SLO BREACH (≥300ms)'; }
-    } else if (p95 >= 150) {
-      elP95.className = 'kpi-value text-warn';
-      if (dotP95) dotP95.className = 'kpi-status-dot status-warn';
-      if (latBadge) { latBadge.className = 'status-badge status-badge-warn'; latBadge.innerText = 'SLO ELEVATED (≥150ms)'; }
+  if (elP95) {
+    if (p95 !== null) {
+      elP95.innerHTML = `${p95.toFixed(1)} <span style="font-size:0.75rem; font-weight:400; color:var(--text-2);">ms</span>`;
+      if (p95 >= 300) {
+        elP95.className = 'kpi-value text-crit';
+        if (dotP95) dotP95.className = 'kpi-status-dot status-crit';
+        if (latBadge) { latBadge.className = 'status-badge status-badge-crit'; latBadge.innerText = 'SLO BREACH (≥300ms)'; }
+      } else if (p95 >= 150) {
+        elP95.className = 'kpi-value text-warn';
+        if (dotP95) dotP95.className = 'kpi-status-dot status-warn';
+        if (latBadge) { latBadge.className = 'status-badge status-badge-warn'; latBadge.innerText = 'SLO ELEVATED (≥150ms)'; }
+      } else {
+        elP95.className = 'kpi-value text-ok';
+        if (dotP95) dotP95.className = 'kpi-status-dot status-ok';
+        if (latBadge) { latBadge.className = 'status-badge status-badge-ok'; latBadge.innerText = 'WITHIN SLO'; }
+      }
     } else {
-      elP95.className = 'kpi-value text-ok';
+      elP95.innerHTML = `-- <span style="font-size:0.75rem; font-weight:400; color:var(--text-2);">ms</span>`;
+      elP95.className = 'kpi-value';
       if (dotP95) dotP95.className = 'kpi-status-dot status-ok';
       if (latBadge) { latBadge.className = 'status-badge status-badge-ok'; latBadge.innerText = 'WITHIN SLO'; }
     }
@@ -369,7 +690,7 @@ window.PERM_PAGE_UPDATE = function(data) {
   const elQueue = document.getElementById('kpi-val-queue');
   const dotQueue = document.getElementById('dot-queue');
   if (elQueue) {
-    elQueue.innerHTML = `${qdepth} <span style="font-size:0.9rem; font-weight:400; color:var(--text-2);">/ 20</span>`;
+    elQueue.innerHTML = `${qdepth} <span style="font-size:0.75rem; font-weight:400; color:var(--text-2);">/ 20</span>`;
     if (qdepth >= 10) {
       elQueue.className = 'kpi-value text-crit';
       if (dotQueue) dotQueue.className = 'kpi-status-dot status-crit';
@@ -383,7 +704,7 @@ window.PERM_PAGE_UPDATE = function(data) {
   }
 
   // 6. Failed Requests KPI
-  const fails = telem.dropped_requests_total !== undefined ? telem.dropped_requests_total : (telem.failed_requests !== undefined ? telem.failed_requests : 0);
+  const fails = telem.dropped_requests_total !== undefined ? telem.dropped_requests_total : (telem.error_count !== undefined ? telem.error_count : 0);
   const elFails = document.getElementById('kpi-val-fails');
   const dotFails = document.getElementById('dot-fails');
   if (elFails) {
@@ -394,15 +715,15 @@ window.PERM_PAGE_UPDATE = function(data) {
 
   // 7. 60-Second Rolling Window Sublines (min/max)
   const last60 = history.slice(-60);
-  const arrList = last60.map(r => r.arrival_rate_req_per_s || 0);
+  const arrList = last60.map(r => r.arrivals_count !== undefined ? r.arrivals_count : (r.arrival_rate_req_per_s || 0));
   const arrStats = PERM.computeStats(arrList);
   const subArr = document.getElementById('kpi-sub-arrivals');
   if (subArr) subArr.innerText = `60s min: ${arrStats.min.toFixed(1)} • max: ${arrStats.max.toFixed(1)}`;
 
-  const p95List = last60.map(r => r.p95_latency_ms !== undefined ? r.p95_latency_ms : (r.avg_latency_ms || 0));
+  const p95List = last60.map(r => (r.p95_latency_ms !== null && r.p95_latency_ms !== undefined && r.p95_latency_ms > 0) ? r.p95_latency_ms : null).filter(n => n !== null);
   const p95Stats = PERM.computeStats(p95List);
   const subP95 = document.getElementById('kpi-sub-p95');
-  if (subP95) subP95.innerText = `60s min: ${p95Stats.min.toFixed(1)} • max: ${p95Stats.max.toFixed(1)}`;
+  if (subP95) subP95.innerText = `60s min: ${p95Stats.min ? p95Stats.min.toFixed(1) : '--'} • max: ${p95Stats.max ? p95Stats.max.toFixed(1) : '--'}`;
 
   const workList = last60.map(r => r.active_workers || 2);
   const workStats = PERM.computeStats(workList);
@@ -414,14 +735,27 @@ window.PERM_PAGE_UPDATE = function(data) {
   const subQ = document.getElementById('kpi-sub-queue');
   if (subQ) subQ.innerText = `60s min: ${qStats.min} • max: ${qStats.max}`;
 
-  // 8. Update Charts (Rolling 90s Window)
+  // 8. Rolling 90s Window Charts Preparation
   const windowSlice = history.slice(-90);
   const labels = windowSlice.map(r => PERM.formatTime(r.timestamp));
-  const arrivalsData = windowSlice.map(r => r.arrival_rate_req_per_s || 0);
+  const arrivalsData = windowSlice.map(r => {
+    const val = r.arrivals_count !== undefined ? r.arrivals_count : (r.arrival_rate_req_per_s || 0);
+    return +val.toFixed(1);
+  });
   const workersData = windowSlice.map(r => r.active_workers || 2);
-  const capacityData = workersData.map(w => +(w * 7.89).toFixed(2));
-  const latencyData = windowSlice.map(r => r.p95_latency_ms !== undefined ? r.p95_latency_ms : (r.avg_latency_ms || 0));
-  // Use worker_cpu_per_active_pct from record (No hardcoded 16)
+
+  // Read capacity_per_worker from calibration (not hardcoded)
+  const capPerWorker = data.capacity_per_worker || 7.89;
+  const capacityData = workersData.map(w => +(w * capPerWorker).toFixed(2));
+
+  // Latency data: single-second gaps as null, not 0
+  const latencyData = windowSlice.map(r => {
+    const p = r.p95_latency_ms !== undefined ? r.p95_latency_ms : r.avg_latency_ms;
+    const reqs = r.request_count !== undefined ? r.request_count : (r.arrivals_count || 0);
+    if (p === null || p === undefined || p <= 0 || reqs === 0) return null;
+    return +p.toFixed(1);
+  });
+
   const utilData = windowSlice.map(r => {
     if (r.worker_cpu_per_active_pct !== undefined) return +r.worker_cpu_per_active_pct.toFixed(1);
     if (r.worker_cpu_percent !== undefined) {
@@ -432,8 +766,186 @@ window.PERM_PAGE_UPDATE = function(data) {
     return 0;
   });
 
+  // H1: Predictive Offline Fallback Banner
+  const fbBanner = document.getElementById('predictiveFallbackBanner');
+  const fbLogs = document.getElementById('predictiveFallbackLogs');
+  if (fbBanner) {
+    if (data.forecast_offline_banner && data.forecast_offline_banner.active) {
+      fbBanner.style.display = 'block';
+      if (fbLogs) {
+        fbLogs.innerText = data.forecast_offline_banner.log_tail || '(no log output captured yet)';
+      }
+    } else {
+      fbBanner.style.display = 'none';
+    }
+  }
+
+  // 9. Forecast Horizon (h) and Future Region Setup (H2)
+  const horizon = data.forecast_horizon || (data.controller_state && data.controller_state.forecast_horizon) || 20;
+  const extendedLabels = [...labels];
+  const extendedArrivals = [...arrivalsData];
+  const latestCap = capacityData.length > 0 ? capacityData[capacityData.length - 1] : +(2 * capPerWorker).toFixed(2);
+  const extendedCapacity = [...capacityData];
+
+  // Clock times for future ticks (HH:MM:SS), NEVER "+4s" (H2)
+  let lastDt = new Date();
+  if (windowSlice.length > 0 && windowSlice[windowSlice.length - 1].timestamp) {
+    lastDt = new Date(windowSlice[windowSlice.length - 1].timestamp.replace('Z', '+00:00'));
+  }
+  for (let i = 1; i <= horizon; i++) {
+    const futDt = new Date(lastDt.getTime() + (i * 1000));
+    extendedLabels.push(PERM.formatTime(futDt));
+    extendedArrivals.push(null);
+    extendedCapacity.push(latestCap);
+  }
+
+  // Construct Forecast & Upper Bound Datasets (H2: aligned to t+h, overlaying arrival bars)
+  const forecastData = new Array(extendedLabels.length).fill(null);
+  const forecastUpperData = new Array(extendedLabels.length).fill(null);
+  const forecastMeta = new Array(extendedLabels.length).fill(null);
+  window._heroForecastMeta = forecastMeta;
+
+  const trace = data.controller_trace || [];
+  if (Array.isArray(trace) && trace.length > 0) {
+    const curElapsed = (data.launcher_status && data.launcher_status.elapsed_sec !== null && data.launcher_status.elapsed_sec !== undefined)
+      ? data.launcher_status.elapsed_sec
+      : (trace[trace.length - 1].t || 0);
+
+    trace.forEach(row => {
+      if (row.t !== undefined && (row.forecast_raw > 0 || row.forecast_upper > 0)) {
+        const rHorizon = row.horizon || horizon;
+        const deltaSec = Math.round((row.t + rHorizon) - curElapsed);
+        const targetIndex = (labels.length - 1) + deltaSec;
+        if (targetIndex >= 0 && targetIndex < extendedLabels.length) {
+          forecastData[targetIndex] = +row.forecast_raw.toFixed(1);
+          forecastUpperData[targetIndex] = +row.forecast_upper.toFixed(1);
+          const madeDt = new Date(lastDt.getTime() - Math.round(curElapsed - row.t) * 1000);
+          forecastMeta[targetIndex] = {
+            madeAt: PERM.formatTime(madeDt),
+            forTime: extendedLabels[targetIndex]
+          };
+        }
+      }
+    });
+  }
+
+  // Latest forecast point placed at now + h
+  const ctrlState = data.controller_state || {};
+  const latestFcRaw = ctrlState.forecast_raw || (data.latest_forecast ? data.latest_forecast.raw : 0.0);
+  const latestFcUpper = ctrlState.forecast_upper || (data.latest_forecast ? data.latest_forecast.upper : latestFcRaw);
+  const nowIdx = Math.max(0, labels.length - 1);
+  const targetNowIdx = extendedLabels.length - 1;
+  const nowClockStr = PERM.formatTime(lastDt);
+  const targetClockStr = extendedLabels[targetNowIdx];
+
+  // Small dots ONLY at latest forecast point
+  const pointRadii = new Array(extendedLabels.length).fill(0);
+
+  if (latestFcRaw > 0 || latestFcUpper > 0) {
+    forecastData[targetNowIdx] = +latestFcRaw.toFixed(1);
+    forecastUpperData[targetNowIdx] = +latestFcUpper.toFixed(1);
+    forecastMeta[targetNowIdx] = { madeAt: nowClockStr, forTime: targetClockStr };
+    pointRadii[targetNowIdx] = 4;
+
+    // Connect guide line across future horizon
+    const startRaw = forecastData[nowIdx] !== null ? forecastData[nowIdx] : (arrivalsData[nowIdx] || latestFcRaw);
+    const startUpper = forecastUpperData[nowIdx] !== null ? forecastUpperData[nowIdx] : startRaw;
+    forecastData[nowIdx] = startRaw;
+    forecastUpperData[nowIdx] = startUpper;
+    forecastMeta[nowIdx] = { madeAt: nowClockStr, forTime: extendedLabels[nowIdx] };
+
+    const stepRaw = (latestFcRaw - startRaw) / horizon;
+    const stepUpper = (latestFcUpper - startUpper) / horizon;
+    for (let k = 1; k < horizon; k++) {
+      const fIdx = nowIdx + k;
+      forecastData[fIdx] = +(startRaw + (stepRaw * k)).toFixed(1);
+      forecastUpperData[fIdx] = +(startUpper + (stepUpper * k)).toFixed(1);
+      forecastMeta[fIdx] = { madeAt: nowClockStr, forTime: extendedLabels[fIdx] };
+    }
+  }
+
+  // Build Scale Markers (H3: merged within 3s into one marker, thin line + small numbered badge at top, staggered heights index % 3)
+  const rawScaleEvents = [];
+  if (Array.isArray(ctrlEvents)) {
+    ctrlEvents.forEach(evt => {
+      const type = evt.type || '';
+      if (type === 'SCALE_UP' || type === 'SCALE_DOWN' || type === 'SCALE_PROPOSED') {
+        const reason = evt.reason || '';
+        const fromM = reason.match(/from=(\d+)/);
+        const toM = reason.match(/to=(\d+)/);
+        const fromW = fromM ? parseInt(fromM[1], 10) : 2;
+        const toW = toM ? parseInt(toM[1], 10) : (parseInt(evt.value, 10) || fromW);
+        const dt = evt.time ? new Date(evt.time.replace('Z', '+00:00')) : new Date();
+        rawScaleEvents.push({
+          type: type,
+          epoch: dt.getTime(),
+          timeStr: PERM.formatTime(evt.time),
+          fromW: fromW,
+          toW: toW,
+          reason: reason,
+          raw: evt
+        });
+      }
+    });
+  }
+
+  const mergedGroups = [];
+  let currGroup = null;
+  rawScaleEvents.sort((a, b) => a.epoch - b.epoch);
+  rawScaleEvents.forEach(evt => {
+    if (!currGroup) {
+      currGroup = {
+        startEpoch: evt.epoch,
+        endEpoch: evt.epoch,
+        timeStr: evt.timeStr,
+        fromW: evt.fromW,
+        toW: evt.toW,
+        events: [evt]
+      };
+    } else if (Math.abs(evt.epoch - currGroup.endEpoch) <= 3000) {
+      currGroup.endEpoch = evt.epoch;
+      currGroup.timeStr = evt.timeStr;
+      currGroup.toW = evt.toW;
+      currGroup.events.push(evt);
+    } else {
+      mergedGroups.push(currGroup);
+      currGroup = {
+        startEpoch: evt.epoch,
+        endEpoch: evt.epoch,
+        timeStr: evt.timeStr,
+        fromW: evt.fromW,
+        toW: evt.toW,
+        events: [evt]
+      };
+    }
+  });
+  if (currGroup) mergedGroups.push(currGroup);
+
+  const scaleMarkers = [];
+  mergedGroups.forEach((group, badgeIdx) => {
+    const idx = labels.indexOf(group.timeStr);
+    if (idx !== -1) {
+      const count = group.events.length;
+      const stepLabel = count > 1 ? `${count} steps` : '1 step';
+      const desc = `${group.fromW} -> ${group.toW}, ${stepLabel}`;
+      const isUp = group.toW > group.fromW;
+      const isDown = group.toW < group.fromW;
+      const markerColor = isUp ? '#10b981' : (isDown ? '#71717a' : '#f59e0b');
+
+      scaleMarkers.push({
+        index: idx,
+        badgeNum: badgeIdx + 1,
+        badgeIdx: badgeIdx,
+        color: markerColor,
+        desc: desc,
+        fromW: group.fromW,
+        toW: group.toW,
+        steps: count
+      });
+    }
+  });
+
   // Hero status pill check
-  const latestCap = capacityData.length > 0 ? capacityData[capacityData.length - 1] : 15.78;
   const heroPill = document.getElementById('hero-status-pill');
   if (heroPill) {
     if (arrivals > latestCap) {
@@ -464,27 +976,137 @@ window.PERM_PAGE_UPDATE = function(data) {
     }
   }
 
+  // Needed capacity (hindsight): ceil(smoothed actual arrivals / capacity_per_worker) * capacity_per_worker
+  const neededCapacityData = windowSlice.map((r, i) => {
+    let sArr;
+    if (i >= 2) {
+      sArr = (arrivalsData[i] + arrivalsData[i - 1] + arrivalsData[i - 2]) / 3;
+    } else if (i === 1) {
+      sArr = (arrivalsData[0] + arrivalsData[1]) / 2;
+    } else {
+      sArr = arrivalsData[0];
+    }
+    const neededWorkers = Math.max(1, Math.ceil(sArr / capPerWorker));
+    return +(neededWorkers * capPerWorker).toFixed(2);
+  });
+  for (let i = 1; i <= horizon; i++) {
+    neededCapacityData.push(null);
+  }
+
+  // Update Forecast Accuracy Strip (P2)
+  const accStripMAE = document.getElementById('accStripMAE');
+  const accStripBias = document.getElementById('accStripBias');
+  const accStripCount = document.getElementById('accStripCount');
+  if (data.forecast_accuracy) {
+    const fa = data.forecast_accuracy;
+    if (accStripMAE) {
+      if (typeof fa.mae === 'number') {
+        accStripMAE.innerText = `${fa.mae.toFixed(2)} req/s`;
+      } else {
+        accStripMAE.innerText = (fa.mae && fa.mae !== 'n/a') ? `${fa.mae} req/s` : 'n/a';
+      }
+    }
+    if (accStripBias) {
+      if (typeof fa.bias === 'number') {
+        const sign = fa.bias > 0 ? '+' : '';
+        accStripBias.innerText = `${sign}${fa.bias.toFixed(2)} req/s`;
+      } else {
+        accStripBias.innerText = (fa.bias && fa.bias !== 'n/a') ? String(fa.bias) : 'n/a';
+      }
+    }
+    const mCount = fa.matured_count !== undefined ? fa.matured_count : (fa.count || 0);
+    if (accStripCount) accStripCount.innerText = `(${mCount} matured)`;
+  }
+
+  // Update Run Summary Card (P2)
+  const runSummaryCard = document.getElementById('runSummaryCard');
+  const summary = (data.launcher_status && data.launcher_status.last_run_summary) || data.last_run_summary;
+  if (runSummaryCard) {
+    if (summary && data.launcher_status && (data.launcher_status.status === 'finished' || data.launcher_status.status === 'idle')) {
+      runSummaryCard.style.display = 'block';
+      const setVal = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = val !== null && val !== undefined ? val : '—';
+      };
+      const bOnset = summary.burst_onset_time !== undefined ? summary.burst_onset_time : summary.burst_onset_time_sec;
+      const fScale = summary.first_scale_up_time !== undefined ? summary.first_scale_up_time : summary.first_scale_up_time_sec;
+      const lTime = summary.lead_time_seconds !== undefined ? summary.lead_time_seconds : summary.lead_time_sec;
+      const q15 = summary.seconds_queue_ge_15 !== undefined ? summary.seconds_queue_ge_15 : summary.seconds_queue_gte_15;
+
+      setVal('sum-burst-onset', bOnset !== null && bOnset !== undefined ? `${bOnset}s` : 'None');
+      setVal('sum-first-scale', fScale !== null && fScale !== undefined ? `${fScale}s` : 'None');
+      setVal('sum-lead-time', lTime !== null && lTime !== undefined ? `${lTime > 0 ? '+' : ''}${lTime}s` : 'n/a');
+      setVal('sum-peak-workers', summary.peak_workers !== null && summary.peak_workers !== undefined ? `${summary.peak_workers}` : '—');
+      setVal('sum-worker-seconds', summary.worker_seconds !== null && summary.worker_seconds !== undefined ? `${summary.worker_seconds} w·s` : '—');
+      setVal('sum-overprovision', summary.over_provision_ratio !== null && summary.over_provision_ratio !== undefined ? `${summary.over_provision_ratio.toFixed(2)}x` : '—');
+      setVal('sum-util-85', summary.seconds_util_gt_85 !== null && summary.seconds_util_gt_85 !== undefined ? `${summary.seconds_util_gt_85}s` : '0s');
+      setVal('sum-queue-15', q15 !== null && q15 !== undefined ? `${q15}s` : '0s');
+      setVal('sum-dropped', summary.dropped_requests !== null && summary.dropped_requests !== undefined ? `${summary.dropped_requests}` : '0');
+    }
+  }
+
+  // H2: Check if inference is offline
+  const isOffline = Boolean(data.forecast_fallback) || (data.controller_status && !data.controller_status.forecast_online) || (ctrlState.forecast_online === false);
+
+  // Update Hero Chart
   if (heroChart) {
-    heroChart.data.labels = labels;
-    heroChart.data.datasets[0].data = arrivalsData;
-    heroChart.data.datasets[1].data = capacityData;
-    heroChart.data.datasets[2].data = workersData;
+    heroChart.data.labels = extendedLabels;
+    heroChart.data.datasets[0].data = extendedArrivals;
+    heroChart.data.datasets[1].data = extendedCapacity;
+
+    if (heroChart.data.datasets.length > 4) {
+      heroChart.data.datasets[4].data = neededCapacityData;
+      const toggleEl = document.getElementById('toggleNeededCapacity');
+      if (toggleEl) {
+        heroChart.data.datasets[4].hidden = !toggleEl.checked;
+      }
+    }
+
+    if (isOffline) {
+      heroChart.data.datasets[2].data = [];
+      heroChart.data.datasets[3].data = [];
+      heroChart.options.plugins.legend.labels.filter = function(item) {
+        return item.datasetIndex !== 2 && item.datasetIndex !== 3; // hide Forecast and Upper bound
+      };
+    } else {
+      heroChart.data.datasets[2].data = forecastData;
+      heroChart.data.datasets[2].pointRadius = pointRadii;
+      heroChart.data.datasets[3].data = forecastUpperData;
+      heroChart.options.plugins.legend.labels.filter = function(item) {
+        return true;
+      };
+    }
+
+    heroChart.options.plugins.permAnnotations = {
+      verticalMarkers: scaleMarkers,
+      futureRegion: {
+        fromIndex: Math.max(0, labels.length - 1),
+        toIndex: extendedLabels.length - 1,
+        isOffline: isOffline,
+        label: `forecast +${horizon}s`,
+        color: 'rgba(255, 255, 255, 0.04)', // subtle neutral tint (white at ~4% alpha)
+        borderColor: 'rgba(255, 255, 255, 0.25)', // thin dashed vertical "now" line
+        textColor: 'rgba(255, 255, 255, 0.4)'
+      }
+    };
     heroChart.update('none');
   }
 
+  // Update Latency Chart (gaps as null)
   if (latChart) {
     latChart.data.labels = labels;
     latChart.data.datasets[0].data = latencyData;
     latChart.update('none');
   }
 
+  // Update Utilization Chart
   if (utilChart) {
     utilChart.data.labels = labels;
     utilChart.data.datasets[0].data = utilData;
     utilChart.update('none');
   }
 
-  // 9. D6: Event Feed Panel (Last 10 events)
+  // 10. Event Feed Strip (compact 6 rows)
   renderEventFeed(ctrlEvents);
 };
 
@@ -494,23 +1116,21 @@ function renderEventFeed(events) {
   if (!tbody) return;
 
   if (!events || events.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: var(--space-4);">No scaling or alert events recorded in current run.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 8px;">No scaling or alert events recorded in current run.</td></tr>`;
     if (countLabel) countLabel.innerText = '0 events';
     return;
   }
 
-  const last10 = events.slice(-10).reverse();
-  if (countLabel) countLabel.innerText = `${events.length} total (${last10.length} shown)`;
+  const last4 = events.slice(-4).reverse();
+  if (countLabel) countLabel.innerText = `${events.length} total (${last4.length} shown)`;
 
-  tbody.innerHTML = last10.map(evt => {
+  tbody.innerHTML = last4.map(evt => {
     let badgeClass = 'status-badge status-badge-ok';
     let typeName = evt.type || 'INFO';
     if (typeName === 'CRITICAL' || typeName === 'SCALE_DOWN') {
       badgeClass = 'status-badge status-badge-crit';
-    } else if (typeName === 'WARN' || typeName === 'SCALE_UP') {
+    } else if (typeName === 'WARN' || typeName === 'SCALE_UP' || typeName === 'SCALE_PROPOSED') {
       badgeClass = 'status-badge status-badge-warn';
-    } else if (typeName === 'RECOVERY') {
-      badgeClass = 'status-badge status-badge-ok';
     }
 
     const timeStr = evt.time ? PERM.formatTime(evt.time) : '--:--:--';
@@ -521,17 +1141,26 @@ function renderEventFeed(events) {
 
     return `
       <tr>
-        <td class="mono" style="font-size:0.75rem;">${timeStr}<span style="color:var(--text-muted); font-size:0.7rem;">${relStr}</span></td>
+        <td class="mono" style="font-size:0.75rem;">${timeStr}<span style="color:var(--text-muted); font-size:0.68rem;">${relStr}</span></td>
         <td><span class="${badgeClass}">${typeName}</span></td>
         <td>${signal} = ${val}</td>
         <td class="mono" style="font-weight:600; color:var(--text-workers);">${PERM.escapeHtml(evt.action || evt.signal || '—')}</td>
-        <td style="font-size:0.8rem; color:var(--text-1);">${reason}</td>
+        <td style="font-size:0.75rem; color:var(--text-1);">${reason}</td>
       </tr>
     `;
   }).join('');
 }
 
+window.PERM = window.PERM || {};
+PERM.toggleNeededCapacity = function(checked) {
+  if (heroChart && heroChart.data.datasets.length > 4) {
+    heroChart.data.datasets[4].hidden = !checked;
+    heroChart.update('none');
+  }
+};
+
 document.addEventListener('DOMContentLoaded', () => {
+  window.scrollTo(0, 0);
   initOverviewCharts();
 });
 </script>

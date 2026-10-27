@@ -27,32 +27,18 @@
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-section-label">TELEMETRY &amp; SCALE</div>
+        <div class="nav-section-label">OPERATIONS</div>
         <a href="/overview" class="nav-item {% if active_page == 'overview' %}active{% endif %}">
           <span class="nav-icon">📊</span>
-          <span>Overview</span>
+          <span>Live</span>
         </a>
-        <a href="/cpu" class="nav-item {% if active_page == 'cpu' %}active{% endif %}">
-          <span class="nav-icon">⚡</span>
-          <span>CPU</span>
-        </a>
-        <a href="/latency" class="nav-item {% if active_page == 'latency' %}active{% endif %}">
-          <span class="nav-icon">⏱️</span>
-          <span>Latency</span>
-        </a>
-        <a href="/forecast" class="nav-item {% if active_page == 'forecast' %}active{% endif %}">
-          <span class="nav-icon">📈</span>
-          <span>Forecast</span>
-        </a>
-        <a href="/alerts" class="nav-item {% if active_page == 'alerts' %}active{% endif %}">
-          <span class="nav-icon">🚨</span>
-          <span>Alerts &amp; Scaling</span>
-        </a>
-
-        <div class="nav-section-label" style="margin-top: var(--space-4);">LOAD GENERATION</div>
         <a href="/experiments" class="nav-item {% if active_page == 'experiments' %}active{% endif %}">
           <span class="nav-icon">🚀</span>
-          <span>Scenario launcher</span>
+          <span>Run scenario</span>
+        </a>
+        <a href="/analysis" class="nav-item {% if active_page == 'analysis' %}active{% endif %}">
+          <span class="nav-icon">📈</span>
+          <span>Analysis</span>
         </a>
       </nav>
 
@@ -72,7 +58,7 @@
           <h1 class="page-title">{% block page_title %}Overview{% endblock %}</h1>
         </div>
 
-        <!-- Service Pills (B1, B2) -->
+        <!-- Service Pills (B1, B2, H4) -->
         <div class="topbar-services">
           <div class="service-pill" id="pill-collector" onclick="PERM.showServiceCommand('collector')" title="Telemetry Collector">
             <span class="pill-dot"></span>
@@ -82,13 +68,11 @@
             <span class="pill-dot"></span>
             <span>Inference</span>
           </div>
-          <div class="service-pill" id="pill-alert" onclick="PERM.showServiceCommand('alert')" title="Alert Engine">
+          <div class="service-dot-pill" id="pill-alert" onclick="PERM.showServiceCommand('alert')" title="Alert Engine (offline)">
             <span class="pill-dot"></span>
-            <span>Alerts</span>
           </div>
-          <div class="service-pill" id="pill-remediation" onclick="PERM.showServiceCommand('remediation')" title="Remediation Service">
+          <div class="service-dot-pill" id="pill-remediation" onclick="PERM.showServiceCommand('remediation')" title="Remediation Service (offline)">
             <span class="pill-dot"></span>
-            <span>Remediation</span>
           </div>
           <div class="service-pill" id="pill-controller" onclick="PERM.showServiceCommand('controller')" title="Demo Controller">
             <span class="pill-dot"></span>
@@ -96,8 +80,51 @@
           </div>
         </div>
 
-        <!-- Active Scenario Chip with Progress Bar (D1) -->
+        <!-- Active Scenario Chip with Progress Bar (D1, H4) -->
         <div class="topbar-right">
+          <!-- G3, H4. Scaling Auto / Manual Toggle + Settings Popover -->
+          <div class="topbar-scaling-control" title="Live closed-loop scaling approval mode">
+            <span class="scaling-mode-label">Scaling:</span>
+            <div class="segmented-control" id="topbarScalingSwitch">
+              <button type="button" class="seg-btn active" id="btn-scale-auto" onclick="PERM.setApprovalMode('auto')">Auto</button>
+              <button type="button" class="seg-btn" id="btn-scale-manual" onclick="PERM.setApprovalMode('manual')">Manual</button>
+            </div>
+            <!-- H4 Settings Popover for "Ask before release" -->
+            <div style="position:relative; margin-left:4px;">
+              <button type="button" class="btn-gear" id="btnSettingsPopover" onclick="PERM.toggleSettingsPopover()" title="Scaling Settings">⚙</button>
+              <div class="settings-popover" id="settingsPopover" style="display:none;">
+                <label class="checkbox-label-sm" title="Ask operator confirmation before scale-down release">
+                  <input type="checkbox" id="checkAskReleaseTopbar" onchange="PERM.toggleAskRelease(this.checked)" />
+                  <span>Ask before release</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <!-- G2. Notifications Bell -->
+          <div style="position:relative;">
+            <button type="button" class="bell-btn" id="btnNotificationsBell" onclick="PERM.toggleNotificationsDropdown()" title="Scale Event Notifications">
+              <span>🔔</span>
+              <span class="bell-badge" id="bellUnreadBadge" style="display:none;">0</span>
+            </button>
+            <div class="notifications-dropdown" id="notificationsDropdown" style="display:none;">
+              <div class="notif-header">
+                <span style="font-weight:700; font-size:0.8rem; color:var(--text-1);">Scaling Notifications</span>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <label class="checkbox-label-sm" title="Toggle audio alert chime">
+                    <input type="checkbox" id="checkSoundAlerts" onchange="PERM.toggleSound(this.checked)" />
+                    <span>Sound</span>
+                  </label>
+                  <button type="button" class="btn-text-sm" onclick="PERM.requestDesktopAlerts()" title="Enable browser alerts when tab is hidden">Desktop Alerts</button>
+                  <button type="button" class="btn-text-sm" onclick="PERM.clearNotifications()">Clear</button>
+                </div>
+              </div>
+              <div class="notif-list" id="notifList">
+                <div class="notif-empty">No new scaling events for this run</div>
+              </div>
+            </div>
+          </div>
+
           <div class="scenario-chip idle" id="topbarScenarioChip">
             <span class="scenario-label" id="topbarScenarioLabel">No Scenario Running</span>
             <div class="scenario-progress" id="topbarScenarioProgress"></div>
@@ -116,6 +143,9 @@
       </footer>
     </div>
   </div>
+
+  <!-- Toast Container for Scaling Alerts (G2) -->
+  <div class="toast-container" id="toastContainer"></div>
 
   <!-- Service Command Modal (B2) -->
   <div class="modal-backdrop" id="serviceModal" style="display: none;">

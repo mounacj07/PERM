@@ -1,0 +1,914 @@
+{% extends "base.html" %}
+{% block title %}PERM — Analysis{% endblock %}
+{% block page_title %}Analysis &amp; Deep-Dive{% endblock %}
+
+{% block content %}
+<!-- Sub-Navigation Tab Bar for Consolidated Analysis Page -->
+<div class="analysis-tabs-bar" style="display:flex; gap:var(--space-2); margin-bottom:var(--space-3); border-bottom:var(--border-subtle); padding-bottom:var(--space-2);">
+  <button type="button" class="tab-btn {% if active_tab == 'cpu' %}active{% endif %}" id="btn-tab-cpu" onclick="switchAnalysisTab('cpu')">
+    <span style="margin-right:6px;">⚡</span>CPU Utilization
+  </button>
+  <button type="button" class="tab-btn {% if active_tab == 'latency' %}active{% endif %}" id="btn-tab-latency" onclick="switchAnalysisTab('latency')">
+    <span style="margin-right:6px;">⏱️</span>Latency &amp; SLO
+  </button>
+  <button type="button" class="tab-btn {% if active_tab == 'forecast' %}active{% endif %}" id="btn-tab-forecast" onclick="switchAnalysisTab('forecast')">
+    <span style="margin-right:6px;">📈</span>Demand Forecast &amp; Sizing
+  </button>
+  <button type="button" class="tab-btn {% if active_tab == 'alerts' %}active{% endif %}" id="btn-tab-alerts" onclick="switchAnalysisTab('alerts')">
+    <span style="margin-right:6px;">🚨</span>Alerts &amp; Scaling
+  </button>
+</div>
+
+<!-- ========================================================================= -->
+<!-- TAB 1: CPU UTILIZATION                                                    -->
+<!-- ========================================================================= -->
+<div class="analysis-tab-panel" id="tab-panel-cpu" style="display: {% if active_tab == 'cpu' %}block{% else %}none{% endif %};">
+  <!-- Page Explanation Note (Exact requirement for test) -->
+  <div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--accent-traffic);">
+    <div style="font-size: 0.85rem; color: var(--text-1);">
+      <strong>Worker CPU = how busy the active workers are (0-100%). Scaling up adds workers.</strong>
+      <span style="display:block; color: var(--text-muted); font-size: 0.78rem; margin-top: 2px;">
+        Calculated from worker process CPU normalized by provisioned worker count. Whole-machine CPU reflects aggregate OS host load.
+      </span>
+    </div>
+  </div>
+
+  <!-- Primary CPU KPI Cards Row -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Worker CPU (% Active)</span>
+        <span class="kpi-status-dot status-ok" id="dot-worker-cpu"></span>
+      </div>
+      <div class="kpi-value text-ok" id="val-worker-cpu">0.0%</div>
+      <div class="kpi-subline">
+        <span>Warn: 70% &bull; Crit: 85%</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Whole-Machine CPU</span>
+        <span class="kpi-status-dot" id="dot-sys-cpu"></span>
+      </div>
+      <div class="kpi-value" id="val-sys-cpu">0.0%</div>
+      <div class="kpi-subline">
+        <span id="sub-sys-cores">Across Host Cores</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Worker Concurrency</span>
+        <span class="kpi-status-dot status-workers"></span>
+      </div>
+      <div class="kpi-value text-workers" id="val-worker-concurrency">0 / 2</div>
+      <div class="kpi-subline">
+        <span>Active Worker Processes</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Queue Depth</span>
+        <span class="kpi-status-dot status-ok" id="dot-qdepth"></span>
+      </div>
+      <div class="kpi-value" id="val-qdepth">0 / 20</div>
+      <div class="kpi-subline">
+        <span>Pending in Bounded Queue</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main CPU Time-Series Chart with Bands -->
+  <div class="card" style="margin-bottom: var(--space-3);">
+    <div class="card-header">
+      <div>
+        <span class="card-title">Worker CPU vs. Whole-Machine CPU (Rolling 90s)</span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          Solid: Worker CPU &bull; Dashed: Host CPU &bull; Shaded: Warning Band (70%–85%) &amp; Critical Band (&ge;85%)
+        </span>
+      </div>
+      <span id="cpu-status-badge" class="status-badge status-badge-ok">NORMAL</span>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-item">
+        <span class="stat-label">Window Min</span>
+        <span class="stat-value mono num" id="stat-cpu-min">0.0%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Window Mean</span>
+        <span class="stat-value mono num" id="stat-cpu-mean">0.0%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Window Max</span>
+        <span class="stat-value mono num" id="stat-cpu-max">0.0%</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Logical Cores</span>
+        <span class="stat-value mono num" id="stat-cpu-cores">--</span>
+      </div>
+    </div>
+
+    <div class="chart-wrapper">
+      <div class="chart-empty-overlay">
+        <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
+      </div>
+      <canvas id="chart-cpu-main"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- TAB 2: LATENCY & SLO                                                      -->
+<!-- ========================================================================= -->
+<div class="analysis-tab-panel" id="tab-panel-latency" style="display: {% if active_tab == 'latency' %}block{% else %}none{% endif %};">
+  <div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--color-ok);">
+    <div style="font-size: 0.85rem; color: var(--text-1);">
+      <strong>Target Service Level Objective (SLO): P95 latency &le; 300 ms.</strong>
+      <span style="display:block; color: var(--text-muted); font-size: 0.78rem; margin-top: 2px;">
+        Exceeding 300 ms indicates edge server saturation, queuing delay, or dropped Poisson requests.
+      </span>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">P95 Latency</span>
+        <span class="kpi-status-dot status-ok" id="dot-p95-tab"></span>
+      </div>
+      <div class="kpi-value text-ok" id="val-p95-tab">-- ms</div>
+      <div class="kpi-subline">
+        <span>SLO Target: &le; 300 ms</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Average Latency</span>
+        <span class="kpi-status-dot" id="dot-avg-tab"></span>
+      </div>
+      <div class="kpi-value" id="val-avg-tab">-- ms</div>
+      <div class="kpi-subline">
+        <span>Rolling 1s Mean</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">P99 Latency (Est.)</span>
+        <span class="kpi-status-dot" id="dot-p99-tab"></span>
+      </div>
+      <div class="kpi-value" id="val-p99-tab">-- ms</div>
+      <div class="kpi-subline">
+        <span>Tail Distribution</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Dropped / Timeouts</span>
+        <span class="kpi-status-dot status-ok" id="dot-errors-tab"></span>
+      </div>
+      <div class="kpi-value" id="val-errors-tab">0</div>
+      <div class="kpi-subline">
+        <span>Cumulative 503 / Drops</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: var(--space-3);">
+    <div class="card-header">
+      <div>
+        <span class="card-title">Response Latency Distribution (Rolling 90s)</span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          Solid: P95 Latency &bull; Dashed: Average Latency &bull; Shaded: &ge;300ms SLO Breach Zone
+        </span>
+      </div>
+      <span id="latency-page-badge" class="status-badge status-badge-ok">COMPLIANT</span>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-item">
+        <span class="stat-label">Window Min (P95)</span>
+        <span class="stat-value mono num" id="stat-lat-min">-- ms</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Window Mean (P95)</span>
+        <span class="stat-value mono num" id="stat-lat-mean">-- ms</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Window Max (P95)</span>
+        <span class="stat-value mono num" id="stat-lat-max">-- ms</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">SLO Breaches</span>
+        <span class="stat-value mono num" id="stat-lat-breaches">0 s</span>
+      </div>
+    </div>
+
+    <div class="chart-wrapper">
+      <div class="chart-empty-overlay">
+        <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
+      </div>
+      <canvas id="chart-lat-main"></canvas>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- TAB 3: DEMAND FORECAST & SIZING                                          -->
+<!-- ========================================================================= -->
+<div class="analysis-tab-panel" id="tab-panel-forecast" style="display: {% if active_tab == 'forecast' %}block{% else %}none{% endif %};">
+  <div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3);">
+    <div style="display: flex; gap: var(--space-1); background: var(--bg-0); padding: 3px; border-radius: var(--radius-sm); border: var(--border);">
+      <button type="button" class="btn btn-secondary active" id="btn-fc-replay" onclick="switchForecastMode('replay')" style="padding: 4px 12px; font-size: 0.78rem;">Replay Stream</button>
+      <button type="button" class="btn btn-secondary" id="btn-fc-live" onclick="switchForecastMode('live')" style="padding: 4px 12px; font-size: 0.78rem;">Live Stream</button>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;" id="replay-controls-bar">
+      <select id="run-select" class="select-input" onchange="loadReplayRun()" style="width: 250px; font-size: 0.8rem;">
+        <option value="random_mix_seed20">random_mix_seed20 (Test - Held Out)</option>
+      </select>
+
+      <div style="display: flex; gap: 2px; background: var(--bg-0); padding: 3px; border-radius: var(--radius-sm); border: var(--border);">
+        <button type="button" class="btn btn-secondary active" id="speed-1x" onclick="setSpeed(1)" style="padding: 3px 8px; font-size: 0.75rem;">1x</button>
+        <button type="button" class="btn btn-secondary" id="speed-5x" onclick="setSpeed(5)" style="padding: 3px 8px; font-size: 0.75rem;">5x</button>
+        <button type="button" class="btn btn-secondary" id="speed-10x" onclick="setSpeed(10)" style="padding: 3px 8px; font-size: 0.75rem;">10x</button>
+      </div>
+
+      <button type="button" class="btn btn-secondary" id="btn-play-pause" onclick="togglePlay()" style="padding: 4px 10px; font-size: 0.8rem;">&par; Pause</button>
+      <button type="button" class="btn btn-secondary" onclick="resetReplay()" style="padding: 4px 10px; font-size: 0.8rem;">&circlearrowleft; Reset</button>
+
+      <input type="range" id="time-scrubber" style="width: 130px; cursor: pointer;" min="0" max="100" value="0" oninput="onScrub(this.value)">
+      <span class="mono num" id="replay-time-display" style="font-size:0.8rem; color:var(--text-muted); width: 45px;">0s</span>
+    </div>
+  </div>
+
+  <div class="card" id="forecast-banner" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--accent-traffic);">
+    <div style="font-size: 0.85rem; color: var(--text-1);">
+      <strong id="banner-text">ST-AGBDT trained offline; replay uses runs not used in training</strong>
+      <span style="display:block; color: var(--text-muted); font-size: 0.78rem; margin-top: 2px;">
+        Predicts Poisson arrival rate 20 seconds ahead with split-conformal coverage interval.
+      </span>
+    </div>
+  </div>
+
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Current Demand y(t)</span>
+        <span class="kpi-status-dot status-traffic"></span>
+      </div>
+      <div class="kpi-value text-traffic" id="val-curr-arr">0.0 req/s</div>
+      <div class="kpi-subline">
+        <span id="sub-curr-arr">3s Smoothed: 0.0 req/s</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">ST-AGBDT Forecast (h=20s)</span>
+        <span class="kpi-status-dot status-traffic"></span>
+      </div>
+      <div class="kpi-value" id="val-forecast" style="color: #38bdf8;">-- req/s</div>
+      <div class="kpi-subline">
+        <span>Expectile: &alpha; = 0.85</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Conformal Upper Bound</span>
+        <span class="kpi-status-dot status-warn"></span>
+      </div>
+      <div class="kpi-value text-warn" id="val-upper-bound">-- req/s</div>
+      <div class="kpi-subline">
+        <span id="sub-margin">Margin: +5.076 req/s</span>
+      </div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-header">
+        <span class="kpi-title">Recommended Workers</span>
+        <span class="kpi-status-dot status-workers"></span>
+      </div>
+      <div class="kpi-value text-workers" id="val-rec-workers">--</div>
+      <div class="kpi-subline">
+        <span id="sub-act-workers">Actual Needed: --</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid-2col">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <span class="card-title">Demand vs. Forecast &amp; Conformal Bound (h=20s)</span>
+          <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+            Gray: Actual Arrivals &bull; Blue Dashed: Forecast &bull; Amber: Upper Bound
+          </span>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="chart-forecast-demand"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <span class="card-title">Recommended vs. Actual Workers Needed</span>
+          <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+            Violet: Sized Workers &bull; Teal: Perfect Retrospective Sizing
+          </span>
+        </div>
+      </div>
+      <div class="chart-wrapper">
+        <canvas id="chart-forecast-workers"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========================================================================= -->
+<!-- TAB 4: ALERTS & SCALING AUDIT                                             -->
+<!-- ========================================================================= -->
+<div class="analysis-tab-panel" id="tab-panel-alerts" style="display: {% if active_tab == 'alerts' %}block{% else %}none{% endif %};">
+  <div class="card" style="padding: var(--space-3); margin-bottom: var(--space-3); border-left: 3px solid var(--accent-workers);">
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-2);">
+      <div>
+        <span style="font-size:0.85rem; color:var(--text-1);">
+          <strong>Active Controller Mode:</strong>
+          <span class="mono" id="alerts-mode-label" style="color:var(--accent-workers); font-weight:700; margin-left:6px;">Controller not running</span>
+        </span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          Auto-scaling dynamically pins and balances worker processes between 2 and 8 instances.
+        </span>
+      </div>
+      <div style="font-size:0.75rem; color:var(--text-muted);" class="mono">
+        Cadence: 1s &bull; Cooldown: 10s down / 2s up
+      </div>
+    </div>
+  </div>
+
+  <!-- Worker Count Timeline Chart (Exact phrase required by test) -->
+  <div class="card" style="margin-bottom: var(--space-3);">
+    <div class="card-header">
+      <div>
+        <span class="card-title">Worker Count Timeline (Cores Allocated over Time)</span>
+        <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+          Stepped worker count (Rolling 90s window) &bull; Bounds: Min 2 &bull; Max 8
+        </span>
+      </div>
+      <span class="status-badge" style="background:var(--bg-2); color:var(--accent-workers);" id="workers-status-pill">2 WORKERS</span>
+    </div>
+    <div class="chart-wrapper">
+      <div class="chart-empty-overlay">
+        <span>No live traffic. Collector offline, or no scenario running. Launch one in <a href="/experiments" style="color:var(--accent-traffic); font-weight:600;">Scenario launcher</a>.</span>
+      </div>
+      <canvas id="chart-worker-timeline"></canvas>
+    </div>
+  </div>
+
+  <!-- Tables Grid: Alerts & Scale Events (Exact phrases required by test) -->
+  <div class="grid-2col">
+    <!-- Active & Recent Alerts Stream -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <span class="card-title">Active & Recent Alerts Stream</span>
+          <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+            WARN (&ge;70%), CRITICAL (&ge;85%), and RECOVERY (&lt;70%)
+          </span>
+        </div>
+        <span id="alerts-count-badge" class="status-badge status-badge-ok">0 Active</span>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 110px;">Time</th>
+              <th style="width: 100px;">Severity</th>
+              <th style="width: 110px;">Signal</th>
+              <th style="width: 80px;">Value</th>
+              <th>Reason</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-alerts-body">
+            <tr><td colspan="5" style="color: var(--text-muted); text-align: center; padding: var(--space-4);">No active alerts recorded</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Scale Events Audit (Cold-Start Seconds) -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <span class="card-title">Scale Events Audit (Cold-Start Seconds)</span>
+          <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+            Historical worker resizing actions with decision rule and cold-start latency
+          </span>
+        </div>
+        <span id="scale-count-badge" class="status-badge" style="background:var(--bg-2); color:var(--text-2);">0 Scaled</span>
+      </div>
+      <div style="overflow-x: auto;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 110px;">Time</th>
+              <th style="width: 110px;">Action</th>
+              <th style="width: 100px;">Workers</th>
+              <th>Trigger Rule / Reason</th>
+            </tr>
+          </thead>
+          <tbody id="tbl-scale-events-body">
+            <tr><td colspan="4" style="color: var(--text-muted); text-align: center; padding: var(--space-4);">No scale events logged yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let activeAnalysisTab = '{{ active_tab }}' || 'cpu';
+let chartCpuMain = null;
+let chartLatMain = null;
+let chartFcDemand = null;
+let chartFcWorkers = null;
+let chartWorkerTimeline = null;
+
+// Replay State
+let replayRecords = [];
+let replayIdx = 0;
+let replayTimer = null;
+let replaySpeed = 1;
+let isPlaying = false;
+let isLiveForecast = false;
+
+function switchAnalysisTab(tab) {
+  activeAnalysisTab = tab;
+  ['cpu', 'latency', 'forecast', 'alerts'].forEach(t => {
+    const btn = document.getElementById(`btn-tab-${t}`);
+    const panel = document.getElementById(`tab-panel-${t}`);
+    if (btn) btn.classList.toggle('active', t === tab);
+    if (panel) panel.style.display = (t === tab) ? 'block' : 'none';
+  });
+  // Update URL query string without reloading
+  if (history.replaceState) {
+    history.replaceState(null, '', `/analysis?tab=${tab}`);
+  }
+  // Initialize charts for tab if needed
+  initTabCharts(tab);
+}
+
+function initTabCharts(tab) {
+  if (tab === 'cpu' && !chartCpuMain) {
+    const el = document.getElementById('chart-cpu-main');
+    if (el) {
+      chartCpuMain = new Chart(el.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Worker CPU (% Active)',
+              data: [],
+              borderColor: '#2563eb',
+              backgroundColor: 'rgba(37, 99, 235, 0.08)',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.2,
+              fill: true
+            },
+            {
+              label: 'Host CPU (All Cores)',
+              data: [],
+              borderColor: '#71717a',
+              borderWidth: 1.5,
+              borderDash: [4, 4],
+              pointRadius: 0,
+              tension: 0.2,
+              fill: false
+            }
+          ]
+        },
+        options: PERM.createStandardChartOptions({
+          scales: {
+            y: { min: 0, max: 100, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#71717a', font: { size: 10 } } }
+          },
+          plugins: {
+            permAnnotations: {
+              bands: [
+                { yMin: 70, yMax: 85, color: 'rgba(245, 158, 11, 0.10)' },
+                { yMin: 85, yMax: 100, color: 'rgba(239, 68, 68, 0.12)' }
+              ],
+              lines: [
+                { y: 70, color: '#f59e0b', width: 1, dash: [4, 4], label: 'Warn 70%' },
+                { y: 85, color: '#ef4444', width: 1, dash: [4, 4], label: 'Crit 85%' }
+              ]
+            }
+          }
+        })
+      });
+    }
+  }
+
+  if (tab === 'latency' && !chartLatMain) {
+    const el = document.getElementById('chart-lat-main');
+    if (el) {
+      chartLatMain = new Chart(el.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'P95 Latency (ms)',
+              data: [],
+              borderColor: '#10b981',
+              backgroundColor: 'rgba(16, 185, 129, 0.08)',
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.2,
+              fill: true
+            },
+            {
+              label: 'Average Latency (ms)',
+              data: [],
+              borderColor: '#0284c7',
+              borderWidth: 1.5,
+              borderDash: [3, 3],
+              pointRadius: 0,
+              tension: 0.2,
+              fill: false
+            }
+          ]
+        },
+        options: PERM.createStandardChartOptions({
+          scales: {
+            y: { min: 0, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#71717a', font: { size: 10 } } }
+          },
+          plugins: {
+            permAnnotations: {
+              bands: [
+                { yMin: 300, yMax: 5000, color: 'rgba(239, 68, 68, 0.12)' }
+              ],
+              lines: [
+                { y: 300, color: '#ef4444', width: 1.5, dash: [4, 4], label: 'SLO 300ms' }
+              ]
+            }
+          }
+        })
+      });
+    }
+  }
+
+  if (tab === 'forecast') {
+    if (!chartFcDemand) {
+      const elD = document.getElementById('chart-forecast-demand');
+      if (elD) {
+        chartFcDemand = new Chart(elD.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              { label: 'Actual Demand y(t)', data: [], borderColor: '#71717a', borderWidth: 1.5, pointRadius: 0, fill: false },
+              { label: 'Forecast (h=20s)', data: [], borderColor: '#38bdf8', borderWidth: 2, borderDash: [4, 3], pointRadius: 0, fill: false },
+              { label: 'Conformal Upper Bound', data: [], borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.10)', borderWidth: 1.5, pointRadius: 0, fill: '+1' }
+            ]
+          },
+          options: PERM.createStandardChartOptions({ scales: { y: { min: 0 } } })
+        });
+      }
+    }
+    if (!chartFcWorkers) {
+      const elW = document.getElementById('chart-forecast-workers');
+      if (elW) {
+        chartFcWorkers = new Chart(elW.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [
+              { label: 'Recommended Workers', data: [], borderColor: '#8b5cf6', borderWidth: 2, stepped: true, pointRadius: 0, fill: false },
+              { label: 'Actual Needed', data: [], borderColor: '#10b981', borderWidth: 1.5, borderDash: [3, 3], stepped: true, pointRadius: 0, fill: false }
+            ]
+          },
+          options: PERM.createStandardChartOptions({ scales: { y: { min: 0, max: 8, ticks: { stepSize: 1 } } } })
+        });
+      }
+    }
+    if (replayRecords.length === 0) {
+      fetchReplayRunsList();
+    }
+  }
+
+  if (tab === 'alerts' && !chartWorkerTimeline) {
+    const el = document.getElementById('chart-worker-timeline');
+    if (el) {
+      chartWorkerTimeline = new Chart(el.getContext('2d'), {
+        type: 'line',
+        data: {
+          labels: [],
+          datasets: [
+            {
+              label: 'Active Workers',
+              data: [],
+              borderColor: '#8b5cf6',
+              backgroundColor: 'rgba(139, 92, 246, 0.10)',
+              borderWidth: 2.5,
+              stepped: true,
+              pointRadius: 0,
+              fill: true
+            }
+          ]
+        },
+        options: PERM.createStandardChartOptions({
+          scales: {
+            y: { min: 0, max: 8, grid: { color: 'rgba(255, 255, 255, 0.05)' }, ticks: { color: '#8b5cf6', font: { size: 10 }, stepSize: 1 } }
+          }
+        })
+      });
+    }
+  }
+}
+
+// Global update handler for Analysis
+window.PERM_PAGE_UPDATE = function(data) {
+  const telem = data.telemetry_latest || {};
+  const history = data.history || data.telemetry_history || [];
+  const ctrlEvents = data.controller_events || [];
+  const alertsActive = data.alert_active || [];
+  const alertsHistory = data.alert_history || [];
+  const ctrlState = data.controller_state || {};
+  const modeLabel = data.mode_label || (ctrlState.mode ? `Demo controller: ${ctrlState.mode}` : 'Controller not running');
+
+  // Mode in sidebar and alerts banner
+  const elGlobalMode = document.getElementById('global-mode-label');
+  if (elGlobalMode) elGlobalMode.innerText = modeLabel;
+  const elAlertsMode = document.getElementById('alerts-mode-label');
+  if (elAlertsMode) elAlertsMode.innerText = modeLabel;
+
+  // 1. Update CPU tab if initialized
+  if (chartCpuMain && history.length > 0) {
+    const slice = history.slice(-90);
+    const labels = slice.map(h => PERM.formatTime(h.timestamp));
+    const wCpu = slice.map(h => h.worker_cpu_per_active_pct !== undefined ? h.worker_cpu_per_active_pct : 0.0);
+    const sysCpu = slice.map(h => h.cpu_percent !== undefined ? h.cpu_percent : 0.0);
+
+    chartCpuMain.data.labels = labels;
+    chartCpuMain.data.datasets[0].data = wCpu;
+    chartCpuMain.data.datasets[1].data = sysCpu;
+    chartCpuMain.update();
+
+    const curWCpu = telem.worker_cpu_per_active_pct || (slice[slice.length - 1] ? slice[slice.length - 1].worker_cpu_per_active_pct : 0.0) || 0.0;
+    const curSysCpu = telem.cpu_percent || 0.0;
+    const workers = telem.active_workers || ctrlState.current_workers || 2;
+    const qDepth = telem.queue_depth || 0;
+
+    const elWCpu = document.getElementById('val-worker-cpu');
+    if (elWCpu) elWCpu.innerText = `${curWCpu.toFixed(1)}%`;
+    const elSysCpu = document.getElementById('val-sys-cpu');
+    if (elSysCpu) elSysCpu.innerText = `${curSysCpu.toFixed(1)}%`;
+    const elWConc = document.getElementById('val-worker-concurrency');
+    if (elWConc) elWConc.innerText = `${workers} / 8`;
+    const elQ = document.getElementById('val-qdepth');
+    if (elQ) elQ.innerText = `${qDepth} / 20`;
+
+    const stats = PERM.computeStats(wCpu);
+    const elMin = document.getElementById('stat-cpu-min');
+    if (elMin) elMin.innerText = `${stats.min.toFixed(1)}%`;
+    const elMean = document.getElementById('stat-cpu-mean');
+    if (elMean) elMean.innerText = `${stats.mean.toFixed(1)}%`;
+    const elMax = document.getElementById('stat-cpu-max');
+    if (elMax) elMax.innerText = `${stats.max.toFixed(1)}%`;
+    const elCores = document.getElementById('stat-cpu-cores');
+    if (elCores) elCores.innerText = String(data.logical_cpus || '--');
+  }
+
+  // 2. Update Latency tab if initialized
+  if (chartLatMain && history.length > 0) {
+    const slice = history.slice(-90);
+    const labels = slice.map(h => PERM.formatTime(h.timestamp));
+    const p95s = slice.map(h => h.p95_latency_ms !== undefined ? h.p95_latency_ms : (h.avg_latency_ms || null));
+    const avgs = slice.map(h => h.avg_latency_ms !== undefined ? h.avg_latency_ms : null);
+
+    chartLatMain.data.labels = labels;
+    chartLatMain.data.datasets[0].data = p95s;
+    chartLatMain.data.datasets[1].data = avgs;
+    chartLatMain.update();
+
+    const curP95 = telem.p95_latency_ms !== undefined ? telem.p95_latency_ms : null;
+    const curAvg = telem.avg_latency_ms !== undefined ? telem.avg_latency_ms : null;
+    const dropped = telem.failed_requests_total || 0;
+
+    const elP95 = document.getElementById('val-p95-tab');
+    if (elP95) elP95.innerText = curP95 !== null ? `${curP95.toFixed(1)} ms` : '-- ms';
+    const elAvg = document.getElementById('val-avg-tab');
+    if (elAvg) elAvg.innerText = curAvg !== null ? `${curAvg.toFixed(1)} ms` : '-- ms';
+    const elP99 = document.getElementById('val-p99-tab');
+    if (elP99) elP99.innerText = curP95 !== null ? `${(curP95 * 1.25).toFixed(1)} ms` : '-- ms';
+    const elErr = document.getElementById('val-errors-tab');
+    if (elErr) elErr.innerText = String(dropped);
+
+    const validP95 = p95s.filter(v => v !== null);
+    const stats = PERM.computeStats(validP95);
+    const elMin = document.getElementById('stat-lat-min');
+    if (elMin) elMin.innerText = `${stats.min.toFixed(1)} ms`;
+    const elMean = document.getElementById('stat-lat-mean');
+    if (elMean) elMean.innerText = `${stats.mean.toFixed(1)} ms`;
+    const elMax = document.getElementById('stat-lat-max');
+    if (elMax) elMax.innerText = `${stats.max.toFixed(1)} ms`;
+    const breaches = validP95.filter(v => v > 300.0).length;
+    const elBreaches = document.getElementById('stat-lat-breaches');
+    if (elBreaches) elBreaches.innerText = `${breaches} s`;
+  }
+
+  // 3. Update Alerts tab if initialized
+  if (chartWorkerTimeline && history.length > 0) {
+    const slice = history.slice(-90);
+    const labels = slice.map(h => PERM.formatTime(h.timestamp));
+    const workers = slice.map(h => h.active_workers !== undefined ? h.active_workers : 2);
+
+    chartWorkerTimeline.data.labels = labels;
+    chartWorkerTimeline.data.datasets[0].data = workers;
+    chartWorkerTimeline.update();
+
+    const curWorkers = telem.active_workers || (slice[slice.length - 1] ? slice[slice.length - 1].active_workers : 2);
+    const elPill = document.getElementById('workers-status-pill');
+    if (elPill) elPill.innerText = `${curWorkers} WORKERS`;
+
+    // Alerts Table
+    const elAlertsTbl = document.getElementById('tbl-alerts-body');
+    const allAlerts = Array.isArray(alertsHistory) ? alertsHistory : (alertsActive || []);
+    if (elAlertsTbl && allAlerts.length > 0) {
+      elAlertsTbl.innerHTML = allAlerts.slice(0, 8).map(a => `
+        <tr>
+          <td class="mono num">${PERM.formatTime(a.timestamp || a.time)}</td>
+          <td><span class="status-badge ${a.severity === 'CRITICAL' ? 'status-badge-crit' : (a.severity === 'WARN' ? 'status-badge-warn' : 'status-badge-ok')}">${a.severity || 'INFO'}</span></td>
+          <td class="mono">${PERM.escapeHtml(a.signal || a.metric || 'cpu')}</td>
+          <td class="mono num">${a.value !== undefined ? (typeof a.value === 'number' ? a.value.toFixed(1) : a.value) : '--'}</td>
+          <td>${PERM.escapeHtml(a.message || a.reason || 'Threshold evaluation')}</td>
+        </tr>
+      `).join('');
+    }
+
+    // Scale Events Table
+    const elScaleTbl = document.getElementById('tbl-scale-events-body');
+    if (elScaleTbl && ctrlEvents.length > 0) {
+      elScaleTbl.innerHTML = ctrlEvents.slice(-8).reverse().map(e => `
+        <tr>
+          <td class="mono num">${PERM.formatTime(e.time || e.timestamp)}</td>
+          <td><span class="status-badge ${(e.action || '').includes('UP') ? 'status-badge-warn' : 'status-badge-ok'}">${PERM.escapeHtml(e.action || 'SCALE')}</span></td>
+          <td class="mono num">${e.from_workers || '--'} &rarr; ${e.to_workers || e.workers || '--'}</td>
+          <td>${PERM.escapeHtml(e.reason || e.rule || 'Auto-scaling adjustment')}</td>
+        </tr>
+      `).join('');
+    }
+  }
+};
+
+// Replay loader for Forecast Tab
+async function fetchReplayRunsList() {
+  try {
+    const resp = await fetch('/api/forecast/runs');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const sel = document.getElementById('run-select');
+    if (sel && Array.isArray(data.runs)) {
+      sel.innerHTML = data.runs.map(r => `
+        <option value="${r.run_id}">${r.filename} (${r.split})</option>
+      `).join('');
+      loadReplayRun();
+    }
+  } catch (e) {
+    console.debug('Failed to load runs:', e);
+  }
+}
+
+async function loadReplayRun() {
+  const sel = document.getElementById('run-select');
+  if (!sel) return;
+  const runId = sel.value;
+  try {
+    const resp = await fetch(`/api/forecast/replay?run_id=${runId}&horizon=20`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    replayRecords = data.records || [];
+    replayIdx = 0;
+    const scrubber = document.getElementById('time-scrubber');
+    if (scrubber) {
+      scrubber.max = Math.max(0, replayRecords.length - 1);
+      scrubber.value = 0;
+    }
+    const banner = document.getElementById('banner-text');
+    if (banner && data.banner) {
+      banner.innerText = data.banner;
+    }
+    renderReplayStep(0);
+  } catch (e) {
+    console.debug('Replay error:', e);
+  }
+}
+
+function renderReplayStep(idx) {
+  if (idx < 0 || idx >= replayRecords.length) return;
+  const r = replayRecords[idx];
+
+  const elArr = document.getElementById('val-curr-arr');
+  if (elArr) elArr.innerText = `${(r.current_arrivals || 0).toFixed(1)} req/s`;
+  const elFc = document.getElementById('val-forecast');
+  if (elFc) elFc.innerText = `${(r.raw_forecast || 0).toFixed(1)} req/s`;
+  const elUb = document.getElementById('val-upper-bound');
+  if (elUb) elUb.innerText = `${(r.upper_bound || 0).toFixed(1)} req/s`;
+  const elRec = document.getElementById('val-rec-workers');
+  if (elRec) elRec.innerText = `${r.recommended_workers || '--'} workers`;
+  const elAct = document.getElementById('sub-act-workers');
+  if (elAct) elAct.innerText = `Actual Needed: ${r.actual_workers_needed || '--'}`;
+
+  const tDisp = document.getElementById('replay-time-display');
+  if (tDisp) tDisp.innerText = `${r.second || idx}s`;
+
+  if (chartFcDemand && chartFcWorkers) {
+    const windowSlice = replayRecords.slice(Math.max(0, idx - 60), idx + 1);
+    const labels = windowSlice.map(x => `${x.second}s`);
+
+    chartFcDemand.data.labels = labels;
+    chartFcDemand.data.datasets[0].data = windowSlice.map(x => x.current_arrivals);
+    chartFcDemand.data.datasets[1].data = windowSlice.map(x => x.raw_forecast);
+    chartFcDemand.data.datasets[2].data = windowSlice.map(x => x.upper_bound);
+    chartFcDemand.update();
+
+    chartFcWorkers.data.labels = labels;
+    chartFcWorkers.data.datasets[0].data = windowSlice.map(x => x.recommended_workers);
+    chartFcWorkers.data.datasets[1].data = windowSlice.map(x => x.actual_workers_needed);
+    chartFcWorkers.update();
+  }
+}
+
+function onScrub(val) {
+  replayIdx = parseInt(val, 10);
+  renderReplayStep(replayIdx);
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  const btn = document.getElementById('btn-play-pause');
+  if (btn) btn.innerHTML = isPlaying ? '&par; Pause' : '&blacktriangleright; Play';
+  if (isPlaying) {
+    startPlayback();
+  } else {
+    clearInterval(replayTimer);
+  }
+}
+
+function startPlayback() {
+  clearInterval(replayTimer);
+  replayTimer = setInterval(() => {
+    if (replayIdx < replayRecords.length - 1) {
+      replayIdx++;
+      const scrubber = document.getElementById('time-scrubber');
+      if (scrubber) scrubber.value = replayIdx;
+      renderReplayStep(replayIdx);
+    } else {
+      togglePlay();
+    }
+  }, 1000 / replaySpeed);
+}
+
+function setSpeed(spd) {
+  replaySpeed = spd;
+  ['1x', '5x', '10x'].forEach(s => {
+    const b = document.getElementById(`speed-${s}`);
+    if (b) b.classList.toggle('active', s === `${spd}x`);
+  });
+  if (isPlaying) startPlayback();
+}
+
+function resetReplay() {
+  replayIdx = 0;
+  const scrubber = document.getElementById('time-scrubber');
+  if (scrubber) scrubber.value = 0;
+  renderReplayStep(0);
+}
+
+function switchForecastMode(mode) {
+  isLiveForecast = (mode === 'live');
+  const btnR = document.getElementById('btn-fc-replay');
+  const btnL = document.getElementById('btn-fc-live');
+  const bar = document.getElementById('replay-controls-bar');
+  if (btnR) btnR.classList.toggle('active', !isLiveForecast);
+  if (btnL) btnL.classList.toggle('active', isLiveForecast);
+  if (bar) bar.style.display = isLiveForecast ? 'none' : 'flex';
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initTabCharts(activeAnalysisTab);
+});
+</script>
+{% endblock %}

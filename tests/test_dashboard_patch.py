@@ -260,6 +260,129 @@ class TestDashboardPatch(unittest.TestCase):
         self.assertEqual(s_data["status"], "stopped")
         mock_proc.terminate.assert_called_once()
 
+    # ─── F1: TIMEZONE STALENESS UNDER NON-UTC TIMEZONE ───
+    @patch("web_dashboard.app._http_session.get")
+    def test_timezone_staleness_non_utc(self, mock_get):
+        from datetime import datetime, timezone, timedelta
+
+        # Simulate local machine in UTC+5:30
+        tz_plus530 = timezone(timedelta(hours=5, minutes=30))
+        now_local = datetime.now(tz_plus530)
+
+        # 1. Fresh sample (1.5 seconds old in local TZ)
+        fresh_ts = (now_local - timedelta(seconds=1.5)).isoformat()
+        sample_metrics = [
+            {"timestamp": fresh_ts, "arrival_rate_req_per_s": 0.0, "active_workers": 2, "worker_cpu_percent": 10.0}
+        ]
+
+        def side_effect(url, **kwargs):
+            r = MagicMock()
+            r.status_code = 200
+            if "/metrics/history" in url:
+                r.json.return_value = {"count": len(sample_metrics), "records": sample_metrics, "history": sample_metrics}
+            elif "/metrics" in url or "/capacity" in url:
+                r.json.return_value = {}
+            else:
+                r.json.return_value = {}
+            return r
+
+        mock_get.side_effect = side_effect
+
+        resp = self.client.get("/api/dashboard/state")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+
+        # Telemetry age should be around 1.5s, definitely NOT ~19800s
+        self.assertIsNotNone(data["telemetry_age_sec"])
+        self.assertLess(data["telemetry_age_sec"], 5.0)
+        self.assertFalse(data["stale"])
+
+        # 2. Stale sample (12.0 seconds old in local TZ)
+        stale_ts = (now_local - timedelta(seconds=12.0)).isoformat()
+        sample_metrics[0]["timestamp"] = stale_ts
+        resp2 = self.client.get("/api/dashboard/state")
+        data2 = resp2.get_json()
+        self.assertGreater(data2["telemetry_age_sec"], 5.0)
+        self.assertTrue(data2["stale"])
+
+    # ─── F1: HISTORY TIMEOUT FALLBACK ───
+    @patch("web_dashboard.app._safe_get")
+    def test_history_timeout_fallback(self, mock_safe_get):
+        # Seed _cached_state with valid prior history
+        prior_history = [
+            {"timestamp": "2026-10-27T12:00:00Z", "arrival_rate_req_per_s": 5.0, "active_workers": 2}
+        ]
+        dashboard_app._cached_state["telemetry_history"] = prior_history
+
+        # Simulate timeout on /metrics/history (returns None)
+        def mock_fetch(url, timeout=None):
+            if "/metrics/history" in url:
+                return None  # timeout / fetch error
+            return {}
+
+        mock_safe_get.side_effect = mock_fetch
+
+        resp = self.client.get("/api/dashboard/state")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+
+        # Verify cached history is preserved rather than blanked
+        self.assertEqual(data["telemetry_history"], prior_history)
+        self.assertEqual(data["history"], prior_history)
+        self.assertTrue(data["stale"])
+
+    # ─── F2: REQUIRED VS OPTIONAL PILLS HEALTH ───
+    @patch("web_dashboard.app._http_session.get")
+    def test_required_vs_optional_pill_state(self, mock_get):
+        # Simulate collector and controller online, alert and remediation offline
+        def side_effect(url, **kwargs):
+            r = MagicMock()
+            if "5000" in url:  # collector
+                r.status_code = 200
+            else:
+                r.status_code = 503
+            return r
+
+        mock_get.side_effect = side_effect
+
+        resp = self.client.get("/api/dashboard/health")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+
+        self.assertEqual(data["collector"]["status"], "online")
+        self.assertEqual(data["alert"]["status"], "offline")
+        self.assertEqual(data["remediation"]["status"], "offline")
+
+    # ─── F4: ELAPSED SEC RECORDED AT PROCESS EXIT AND CAPPED AT DURATION ───
+    @patch("web_dashboard.app._http_session.get")
+    @patch("subprocess.Popen")
+    def test_elapsed_sec_capped_at_duration_on_exit(self, mock_popen, mock_get):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_get.return_value = mock_resp
+
+        mock_proc = MagicMock()
+        mock_proc.pid = 99999
+        mock_proc.poll.return_value = None
+        mock_popen.return_value = mock_proc
+
+        start_resp = self.client.post("/api/launcher/start", json={"profile": "spike", "seed": 42, "duration": 80})
+        self.assertEqual(start_resp.status_code, 200)
+
+        # Simulate process exiting cleanly after 80s run, but queried at 143.4s
+        with self.app.launcher_lock:
+            self.app.launcher_state["start_time"] = time.time() - 143.4
+        mock_proc.poll.return_value = 0
+        mock_proc.returncode = 0
+
+        status_resp = self.client.get("/api/launcher/status")
+        self.assertEqual(status_resp.status_code, 200)
+        data = status_resp.get_json()
+
+        self.assertEqual(data["status"], "finished")
+        # Elapsed sec must be capped at duration_sec (80.0s), not 143.4s!
+        self.assertEqual(data["elapsed_sec"], 80.0)
+
 
 if __name__ == "__main__":
     unittest.main()

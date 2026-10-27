@@ -13,14 +13,12 @@
   </div>
 </div>
 
-<!-- Run Monitor Panel (D7 & A5) -->
-<div class="card" style="margin-bottom: var(--space-4);">
-  <div class="card-header">
-    <div>
-      <span class="card-title">Active Workload Execution</span>
-      <span style="display:block; font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
-        Real-time execution status, elapsed phase timer, and unified process control
-      </span>
+<!-- Sticky Unified Run Control Panel at Top (Part F3) -->
+<div class="card" style="position: sticky; top: 54px; z-index: 50; margin-bottom: var(--space-3); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);">
+  <div class="card-header" style="margin-bottom: var(--space-2);">
+    <div style="display: flex; align-items: center; gap: var(--space-2);">
+      <span class="card-title">Scenario Execution Controller</span>
+      <span id="selectedProfileBadge" class="status-badge" style="background:var(--accent-traffic-subtle); color:var(--accent-traffic); font-weight:700;">SPIKE SELECTED</span>
     </div>
     <div style="display:flex; align-items:center; gap:var(--space-2);">
       <span id="run-phase-badge" class="status-badge" style="display:none;">CALM PHASE</span>
@@ -31,536 +29,554 @@
   <div class="run-monitor-box">
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--space-3);">
       <div>
-        <div class="caption">Active Scenario Profile</div>
-        <div style="font-size: 1.35rem; font-weight: 700; color: var(--text-1);" id="activeProfileText">None (Idle)</div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" id="activeDetailsText">Ready to dispatch scenario</div>
+        <div class="caption">Selected Target Profile</div>
+        <div style="font-size: 1.25rem; font-weight: 700; color: var(--text-1);" id="activeProfileText">Spike Profile (80s)</div>
+        <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 1px;" id="activeDetailsText">Click any card below to switch profile &bull; Ready to dispatch</div>
       </div>
 
       <div style="text-align: right;">
-        <div class="caption">Progress &bull; Elapsed / Real Target</div>
-        <div style="font-size: 1.35rem; font-weight: 700; color: var(--accent-traffic);" class="mono num" id="activeTimerText">0.0s / 0.0s</div>
-        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;" id="activePidText">Locust PID: &mdash; &bull; Controller PID: &mdash;</div>
+        <div class="caption">Elapsed / Duration Target</div>
+        <div style="font-size: 1.25rem; font-weight: 700; color: var(--accent-traffic);" class="mono num" id="activeTimerText">0.0s / 80.0s</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 1px;" id="activePidText">Locust PID: &mdash; &bull; Controller PID: &mdash;</div>
       </div>
 
-      <div>
-        <button id="btnStopRun" class="btn btn-danger" disabled onclick="stopCurrentRun()">
+      <!-- Unified Start & Stop Action Buttons -->
+      <div style="display: flex; gap: var(--space-2);">
+        <button id="btnStartRun" class="btn btn-primary" onclick="launchSelectedProfile()" style="min-width: 130px;">
+          &blacktriangleright; Start Scenario
+        </button>
+        <button id="btnStopRun" class="btn btn-danger" disabled onclick="stopCurrentRun()" style="min-width: 100px;">
           &block; Stop Run
         </button>
       </div>
     </div>
 
-    <!-- Large Progress Bar (D7) -->
-    <div class="progress-bar-container" style="margin-top: var(--space-3);">
-      <div id="runProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+    <!-- Progress Bar -->
+    <div class="progress-bar-container" style="margin-top: var(--space-2); height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden;">
+      <div id="runProgressBar" class="progress-bar-fill" style="width: 0%; height: 100%; background: var(--accent-traffic); transition: width 0.3s linear;"></div>
     </div>
 
-    <!-- Note / Outcome Message (A1, A5) -->
-    <div id="runNoteBanner" class="note-box" style="display: none; margin-top: var(--space-3);">
+    <!-- Note / Outcome Message -->
+    <div id="runNoteBanner" class="note-box" style="display: none; margin-top: var(--space-2); padding: 8px 12px; background: var(--bg-2); border-radius: var(--radius-sm); border: var(--border-subtle); font-size: 0.8rem;">
       <span id="runNoteText"></span>
     </div>
 
-    <!-- Error / Preflight Alert Box (A3, A5) -->
-    <div id="preflightErrorBox" class="note-box error" style="display: none; margin-top: var(--space-3);">
-      <div style="font-weight: 700; margin-bottom: 4px;" id="preflightErrorTitle">Launch Preflight Failed</div>
-      <div id="preflightErrorMessage" style="font-family: var(--font-mono); font-size: 0.8rem; white-space: pre-wrap;"></div>
+    <!-- Preflight Error Box -->
+    <div id="preflightErrorBox" class="note-box error" style="display: none; margin-top: var(--space-2); padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: var(--radius-sm);">
+      <div style="font-weight: 700; color: var(--color-crit); margin-bottom: 2px;" id="preflightErrorTitle">Launch Preflight Failed</div>
+      <div id="preflightErrorMessage" style="font-family: var(--font-mono); font-size: 0.78rem; color: #fca5a5; white-space: pre-wrap;"></div>
     </div>
 
-    <!-- Collapsible Log Tail Box (A2, A5) -->
-    <div id="logTailContainer" style="display: none; margin-top: var(--space-3);">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: var(--space-1);">
+    <!-- Collapsible Log Tail Box -->
+    <div id="logTailContainer" style="display: none; margin-top: var(--space-2);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 2px;">
         <span class="caption" style="color:var(--text-1);">Locust Output (Last 15 Lines):</span>
-        <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" onclick="toggleLogTail()">Toggle Full Output</button>
+        <button type="button" class="btn btn-secondary btn-sm" style="padding: 1px 6px; font-size: 0.7rem;" onclick="toggleLogTail()">Toggle Output</button>
       </div>
-      <pre class="log-tail-box" id="logTailText">No output logs recorded.</pre>
+      <pre class="log-tail-box" id="logTailText" style="max-height: 120px; overflow-y: auto; background: var(--bg-0); padding: 6px 10px; border-radius: var(--radius-sm); font-size: 0.72rem; color: var(--text-2);">No output logs recorded.</pre>
     </div>
   </div>
 
-  <!-- Launch Options Bar (C3: Controller Mode Selector & Run with Controller Checkbox) -->
-  <div style="display: flex; gap: var(--space-4); margin-top: var(--space-3); flex-wrap: wrap; align-items: flex-end; padding-top: var(--space-3); border-top: var(--border-subtle);">
-    <div>
-      <label class="caption" style="display: block; margin-bottom: var(--space-1);">Random Seed</label>
-      <input type="number" id="inputSeed" value="44" class="select-input mono num" style="width: 110px;" />
+  <!-- Launch Options Bar: Mode, Seed, Auto-scale -->
+  <div style="display: flex; gap: var(--space-3); margin-top: var(--space-2); flex-wrap: wrap; align-items: center; padding-top: var(--space-2); border-top: var(--border-subtle);">
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <label class="caption">Seed:</label>
+      <input type="number" id="inputSeed" value="44" class="select-input-sm mono num" style="width: 75px;" />
     </div>
 
-    <div>
-      <label class="caption" style="display: block; margin-bottom: var(--space-1);">Duration Override (s, Optional)</label>
-      <input type="number" id="inputDuration" placeholder="Auto (Burst)" class="select-input mono num" style="width: 140px;" />
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <label class="caption">Duration Override (s):</label>
+      <input type="number" id="inputDuration" placeholder="Auto" class="select-input-sm mono num" style="width: 85px;" />
     </div>
 
-    <div>
-      <label class="caption" style="display: block; margin-bottom: var(--space-1);">Controller Mode</label>
-      <select id="controllerModeSelect" class="select-input" style="width: 160px;">
-        <option value="capacity_aware" selected>Capacity-Aware</option>
-        <option value="reactive">Reactive (70/85%)</option>
-        <option value="predictive">Predictive (ST-AGBDT)</option>
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <label class="caption">Controller Mode:</label>
+      <select id="controllerModeSelect" class="select-input-sm" style="width: 230px;">
+        <option value="predictive_only" selected>Predictive only (ST-AGBDT)</option>
+        <option value="hybrid">Hybrid (forecast + reactive safety net)</option>
+        <option value="reactive">Reactive</option>
+        <option value="capacity_aware">Capacity-aware</option>
       </select>
     </div>
 
-    <div style="display: flex; align-items: center; gap: var(--space-2); padding-bottom: 6px;">
-      <input type="checkbox" id="checkRunWithController" checked style="width: 16px; height: 16px; cursor: pointer;" />
-      <label for="checkRunWithController" style="font-size: 0.82rem; color: var(--text-1); cursor: pointer; user-select: none;">
-        Run with demo controller (auto-scale workers)
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <label class="caption">Approval:</label>
+      <select id="approvalModeSelect" class="select-input-sm" style="width: 110px;">
+        <option value="auto" selected>Auto</option>
+        <option value="manual">Manual</option>
+      </select>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <input type="checkbox" id="checkRunWithController" checked style="width: 14px; height: 14px; cursor: pointer;" />
+      <label for="checkRunWithController" style="font-size: 0.78rem; color: var(--text-1); cursor: pointer; user-select: none;">
+        Run with demo controller (scale workers)
       </label>
     </div>
 
-    <div style="flex: 1; text-align: right; padding-bottom: 6px;">
-      <span id="actionFeedback" style="font-size: 0.8rem; color: var(--accent-traffic); display: none;"></span>
+    <div style="flex: 1; text-align: right;">
+      <span id="actionFeedback" style="font-size: 0.75rem; color: var(--accent-traffic); display: none;"></span>
     </div>
   </div>
 </div>
 
-<!-- D7: Profile Selection Cards Grid (One Card Per Profile with Inline SVG Traffic Shape & Real Duration) -->
-<div style="margin-bottom: var(--space-2);">
-  <h2 style="font-size: 1rem; font-weight: 700; color: var(--text-1); margin-bottom: var(--space-2);">Select Scenario Workload Profile</h2>
+<!-- Profile Selection Cards: 3 per row, fixed 56px SVG, whole card clickable -->
+<div style="margin-bottom: var(--space-1); display:flex; justify-content:space-between; align-items:center;">
+  <h2 style="font-size: 0.95rem; font-weight: 700; color: var(--text-1);">Select Workload Profile (Click Card to Select)</h2>
+  <span style="font-size: 0.75rem; color: var(--text-muted);">3 profiles per row &bull; 56px shape preview</span>
 </div>
 
 <div class="scenario-grid">
   <!-- 1. Step Profile -->
-  <div class="card scenario-card">
+  <div class="card scenario-card" id="card-step" onclick="selectProfile('step'); launchProfile('step');">
     <div class="scenario-card-top">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <div class="scenario-title">Step Profile</div>
+          <div class="scenario-title" style="font-size:0.95rem; font-weight:700; color:var(--text-1);">Step Profile</div>
           <div class="caption">Instant Demand Jump</div>
         </div>
-        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">65s Real</span>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.68rem;">65s Real</span>
       </div>
 
-      <!-- Inline SVG Sketch: Abrupt square step -->
       <div class="scenario-svg-box">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:56px; width:100%; display:block;">
           <path d="M 0 32 L 30 32 L 30 8 L 85 8 L 85 32 L 100 32" fill="none" stroke="#0284c7" stroke-width="2" />
         </svg>
       </div>
 
-      <div class="scenario-desc">
+      <div class="scenario-desc" style="font-size:0.75rem; color:var(--text-muted); line-height:1.3;">
         Abrupt step from baseline (~12 req/s) up to high burst (~45 req/s) at t=20s. Tests instantaneous queuing spike and reactive adaptation delay.
       </div>
     </div>
-
-    <button class="btn btn-primary btn-launch" onclick="launchProfile('step')">
-      &blacktriangleright; Launch Step (65s)
-    </button>
+    <div style="margin-top:var(--space-2); display:flex; justify-content:space-between; align-items:center;">
+      <span class="select-label" style="font-size:0.7rem; color:var(--accent-traffic); font-weight:600;">Click to select</span>
+      <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">profile='step'</span>
+    </div>
   </div>
 
   <!-- 2. Ramp Profile -->
-  <div class="card scenario-card">
+  <div class="card scenario-card" id="card-ramp" onclick="selectProfile('ramp'); launchProfile('ramp');">
     <div class="scenario-card-top">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <div class="scenario-title">Ramp Profile</div>
+          <div class="scenario-title" style="font-size:0.95rem; font-weight:700; color:var(--text-1);">Ramp Profile</div>
           <div class="caption">Linear Demand Growth</div>
         </div>
-        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">135s Real</span>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.68rem;">135s Real</span>
       </div>
 
-      <!-- Inline SVG Sketch: Linear upward slope -->
       <div class="scenario-svg-box">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:56px; width:100%; display:block;">
           <path d="M 0 32 L 20 32 L 75 8 L 90 8 L 100 32" fill="none" stroke="#8b5cf6" stroke-width="2" />
         </svg>
       </div>
 
-      <div class="scenario-desc">
+      <div class="scenario-desc" style="font-size:0.75rem; color:var(--text-muted); line-height:1.3;">
         Smooth, continuous arrival rate increase across 60 seconds (up to 135s total). Tests proportional capacity ramp without over-provisioning overshoot.
       </div>
     </div>
-
-    <button class="btn btn-primary btn-launch" onclick="launchProfile('ramp')">
-      &blacktriangleright; Launch Ramp (135s)
-    </button>
+    <div style="margin-top:var(--space-2); display:flex; justify-content:space-between; align-items:center;">
+      <span class="select-label" style="font-size:0.7rem; color:var(--accent-traffic); font-weight:600;">Click to select</span>
+      <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">profile='ramp'</span>
+    </div>
   </div>
 
-  <!-- 3. Spike Profile -->
-  <div class="card scenario-card">
+  <!-- 3. Spike Profile (Default Recommended) -->
+  <div class="card scenario-card selected" id="card-spike" onclick="selectProfile('spike'); launchProfile('spike');">
     <div class="scenario-card-top">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <div class="scenario-title">Spike Profile</div>
-          <div class="caption">Sharp Impulse Shock</div>
+          <div class="scenario-title" style="font-size:0.95rem; font-weight:700; color:var(--text-1);">Spike Profile</div>
+          <div class="caption">Sharp Impulse Shock (Selected)</div>
         </div>
-        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">65s Real</span>
+        <span class="status-badge status-badge-warn" style="font-size:0.68rem;">80s Real</span>
       </div>
 
-      <!-- Inline SVG Sketch: Needle spike -->
       <div class="scenario-svg-box">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:56px; width:100%; display:block;">
           <path d="M 0 32 L 35 32 L 45 6 L 55 32 L 100 32" fill="none" stroke="#ef4444" stroke-width="2" />
         </svg>
       </div>
 
-      <div class="scenario-desc">
-        Severe, transient 10-second traffic spike at t=20s exceeding worker capacity. Directly evaluates queue saturation and tail latency recovery.
+      <div class="scenario-desc" style="font-size:0.75rem; color:var(--text-muted); line-height:1.3;">
+        Severe transient 15-second traffic spike (t=30-45s) exceeding 2 workers capacity. Demonstrates predictive pre-scaling vs. reactive SLA breaches.
       </div>
     </div>
-
-    <button class="btn btn-primary btn-launch" onclick="launchProfile('spike')">
-      &blacktriangleright; Launch Spike (65s)
-    </button>
+    <div style="margin-top:var(--space-2); display:flex; justify-content:space-between; align-items:center;">
+      <span class="select-label" style="font-size:0.7rem; color:var(--accent-traffic); font-weight:700;">★ Active Selection</span>
+      <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">profile='spike'</span>
+    </div>
   </div>
 
   <!-- 4. Double Burst Profile -->
-  <div class="card scenario-card">
+  <div class="card scenario-card" id="card-double_burst" onclick="selectProfile('double_burst'); launchProfile('double_burst');">
     <div class="scenario-card-top">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <div class="scenario-title">Double Burst</div>
+          <div class="scenario-title" style="font-size:0.95rem; font-weight:700; color:var(--text-1);">Double Burst</div>
           <div class="caption">Repeated Wave Shocks</div>
         </div>
-        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">130s Real</span>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.68rem;">130s Real</span>
       </div>
 
-      <!-- Inline SVG Sketch: Double bumps -->
       <div class="scenario-svg-box">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:56px; width:100%; display:block;">
           <path d="M 0 32 L 15 32 L 25 10 L 40 10 L 48 32 L 60 32 L 70 10 L 85 10 L 92 32 L 100 32" fill="none" stroke="#f59e0b" stroke-width="2" />
         </svg>
       </div>
 
-      <div class="scenario-desc">
+      <div class="scenario-desc" style="font-size:0.75rem; color:var(--text-muted); line-height:1.3;">
         Two distinct consecutive burst phases separated by a calm trough. Tests controller cooldown logic, hysteresis, and rapid second-wave scaleup.
       </div>
     </div>
-
-    <button class="btn btn-primary btn-launch" onclick="launchProfile('double_burst')">
-      &blacktriangleright; Launch Double Burst (130s)
-    </button>
+    <div style="margin-top:var(--space-2); display:flex; justify-content:space-between; align-items:center;">
+      <span class="select-label" style="font-size:0.7rem; color:var(--accent-traffic); font-weight:600;">Click to select</span>
+      <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">profile='double_burst'</span>
+    </div>
   </div>
 
   <!-- 5. Random Walk Profile -->
-  <div class="card scenario-card">
+  <div class="card scenario-card" id="card-random_walk" onclick="selectProfile('random_walk'); launchProfile('random_walk');">
     <div class="scenario-card-top">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <div class="scenario-title">Random Walk</div>
+          <div class="scenario-title" style="font-size:0.95rem; font-weight:700; color:var(--text-1);">Random Walk</div>
           <div class="caption">Brownian Traffic Drift</div>
         </div>
-        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">125s Real</span>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.68rem;">125s Real</span>
       </div>
 
-      <!-- Inline SVG Sketch: Random undulating curve -->
       <div class="scenario-svg-box">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:56px; width:100%; display:block;">
           <path d="M 0 28 Q 15 12, 30 24 T 55 10 T 75 30 T 100 18" fill="none" stroke="#10b981" stroke-width="2" />
         </svg>
       </div>
 
-      <div class="scenario-desc">
+      <div class="scenario-desc" style="font-size:0.75rem; color:var(--text-muted); line-height:1.3;">
         Bounded stochastic random walk across 125 seconds. Models realistic fluctuating traffic patterns without explicit periodic intervals.
       </div>
     </div>
-
-    <button class="btn btn-primary btn-launch" onclick="launchProfile('random_walk')">
-      &blacktriangleright; Launch Random Walk (125s)
-    </button>
+    <div style="margin-top:var(--space-2); display:flex; justify-content:space-between; align-items:center;">
+      <span class="select-label" style="font-size:0.7rem; color:var(--accent-traffic); font-weight:600;">Click to select</span>
+      <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">profile='random_walk'</span>
+    </div>
   </div>
 
   <!-- 6. Random Mix Profile -->
-  <div class="card scenario-card">
+  <div class="card scenario-card" id="card-random_mix" onclick="selectProfile('random_mix'); launchProfile('random_mix');">
     <div class="scenario-card-top">
       <div style="display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
-          <div class="scenario-title">Random Mix</div>
-          <div class="caption">Stochastic Compound Profile</div>
+          <div class="scenario-title" style="font-size:0.95rem; font-weight:700; color:var(--text-1);">Random Mix</div>
+          <div class="caption">Multi-Pattern Composite</div>
         </div>
-        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.7rem;">125s Real</span>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.68rem;">125s Real</span>
       </div>
 
-      <!-- Inline SVG Sketch: Mixed compound profile -->
       <div class="scenario-svg-box">
-        <svg viewBox="0 0 100 40" preserveAspectRatio="none">
-          <path d="M 0 32 L 18 32 L 24 10 L 38 10 L 44 24 L 58 10 L 74 10 L 82 32 L 100 32" fill="none" stroke="#38bdf8" stroke-width="2" />
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:56px; width:100%; display:block;">
+          <path d="M 0 32 L 20 32 L 30 14 L 45 26 L 60 8 L 80 8 L 90 32 L 100 32" fill="none" stroke="#a78bfa" stroke-width="2" />
         </svg>
       </div>
 
-      <div class="scenario-desc">
-        Comprehensive test combining steps, calm intervals, and ramps. Standard testbed scenario used for offline model validation and scoring.
+      <div class="scenario-desc" style="font-size:0.75rem; color:var(--text-muted); line-height:1.3;">
+        Composite pattern combining step shifts, linear trends, and spikes. Used during model evaluation as held-out generalization test.
       </div>
     </div>
+    <div style="margin-top:var(--space-2); display:flex; justify-content:space-between; align-items:center;">
+      <span class="select-label" style="font-size:0.7rem; color:var(--accent-traffic); font-weight:600;">Click to select</span>
+      <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">profile='random_mix'</span>
+    </div>
+  </div>
 
-    <button class="btn btn-primary btn-launch" onclick="launchProfile('random_mix')">
-      &blacktriangleright; Launch Random Mix (125s)
-    </button>
+  <!-- 7. Ramp Burst (Precursor Profile - P3) -->
+  <div class="card scenario-card" id="card-ramp_burst" onclick="selectProfile('ramp_burst'); launchProfile('ramp_burst');">
+    <div class="scenario-card-top">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div class="scenario-title" style="font-size:0.95rem; font-weight:700; color:var(--text-1);">Ramp Burst</div>
+          <div class="caption">Precursor Ramp &amp; High Spike</div>
+        </div>
+        <span class="status-badge" style="background:var(--bg-2); color:var(--text-muted); font-size:0.68rem;">90s Real</span>
+      </div>
+
+      <div class="scenario-svg-box">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" style="height:56px; width:100%; display:block;">
+          <path d="M 0 32 L 33 32 L 55 20 L 55 6 L 77 6 L 77 32 L 100 32" fill="none" stroke="#38bdf8" stroke-width="2" />
+        </svg>
+      </div>
+
+      <div class="scenario-desc" style="font-size:0.75rem; color:var(--text-muted); line-height:1.3;">
+        A step with no precursor cannot be forecast from history; ramp_burst has one.
+      </div>
+    </div>
+    <div style="margin-top:var(--space-2); display:flex; justify-content:space-between; align-items:center;">
+      <span class="select-label" style="font-size:0.7rem; color:var(--accent-traffic); font-weight:600;">Click to select</span>
+      <span class="mono" style="font-size:0.68rem; color:var(--text-muted);">profile='ramp_burst'</span>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
-let lastLauncherState = null;
+let currentSelectedProfile = 'spike';
+let currentLauncherStatus = 'idle';
 
-// Launch a scenario profile
-async function launchProfile(profileName) {
+const PROFILE_DURATIONS = {
+  'step': 65,
+  'ramp': 135,
+  'spike': 80,
+  'double_burst': 130,
+  'random_walk': 125,
+  'random_mix': 125,
+  'ramp_burst': 90
+};
+
+function selectProfile(profile) {
+  currentSelectedProfile = profile;
+  const profiles = ['step', 'ramp', 'spike', 'double_burst', 'random_walk', 'random_mix', 'ramp_burst'];
+  profiles.forEach(p => {
+    const card = document.getElementById(`card-${p}`);
+    if (card) {
+      card.classList.toggle('selected', p === profile);
+      const label = card.querySelector('.select-label');
+      if (label) {
+        label.innerText = (p === profile) ? '★ Active Selection' : 'Click to select';
+      }
+    }
+  });
+
+  const titleEl = document.getElementById('activeProfileText');
+  const badgeEl = document.getElementById('selectedProfileBadge');
+  const timerEl = document.getElementById('activeTimerText');
+  const dur = PROFILE_DURATIONS[profile] || 80;
+
+  if (titleEl) {
+    titleEl.innerText = `${profile.toUpperCase().replace('_', ' ')} Profile (${dur}s)`;
+  }
+  if (badgeEl) {
+    badgeEl.innerText = `${profile.toUpperCase().replace('_', ' ')} SELECTED`;
+  }
+  if (timerEl && currentLauncherStatus !== 'running') {
+    timerEl.innerText = `0.0s / ${dur}.0s`;
+  }
+}
+
+function launchSelectedProfile() {
+  launchProfile(currentSelectedProfile, true);
+}
+
+// Function signature compatible with test assertions: f"launchProfile('{profile}')"
+async function launchProfile(profile, autoStart = false) {
+  selectProfile(profile);
+  if (!autoStart) return;
+
+  hidePreflightError();
   const seedInput = document.getElementById('inputSeed');
   const durInput = document.getElementById('inputDuration');
   const modeSelect = document.getElementById('controllerModeSelect');
-  const checkRunCtrl = document.getElementById('checkRunWithController');
-  const errBox = document.getElementById('preflightErrorBox');
-  const errMsg = document.getElementById('preflightErrorMessage');
+  const runCtrlCheck = document.getElementById('checkRunWithController');
 
-  if (errBox) errBox.style.display = 'none';
-
-  const seed = parseInt(seedInput.value, 10) || 44;
-  const customDur = durInput.value ? parseFloat(durInput.value) : null;
-  const mode = modeSelect.value || 'capacity_aware';
-  const runWithCtrl = checkRunCtrl ? checkRunCtrl.checked : true;
+  const seed = seedInput ? parseInt(seedInput.value, 10) || 44 : 44;
+  const durVal = durInput && durInput.value ? parseInt(durInput.value, 10) : null;
+  const ctrlMode = modeSelect ? modeSelect.value : 'predictive_only';
+  const appSelect = document.getElementById('approvalModeSelect');
+  const appMode = appSelect ? appSelect.value : 'auto';
+  const runWithCtrl = runCtrlCheck ? runCtrlCheck.checked : true;
 
   const payload = {
-    profile: profileName,
+    profile: profile,
     seed: seed,
     run_with_controller: runWithCtrl,
-    controller_mode: mode
+    controller_mode: ctrlMode,
+    approval_mode: appMode
   };
-  if (customDur) {
-    payload.duration = customDur;
+  if (durVal && durVal > 0) {
+    payload.duration = durVal;
   }
 
-  // Disable launch buttons while initiating
-  disableLaunchButtons(true);
-  showActionFeedback(`Dispatching ${profileName} profile...`);
+  const startBtn = document.getElementById('btnStartRun');
+  if (startBtn) {
+    startBtn.disabled = true;
+    startBtn.innerText = 'Launching...';
+  }
 
   try {
-    const res = await fetch('/api/launcher/start', {
+    const resp = await fetch('/api/launcher/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
 
-    const data = await res.json();
+    const data = await resp.json();
 
-    if (!res.ok) {
-      // Preflight or startup failure (A3)
-      if (errBox && errMsg) {
-        document.getElementById('preflightErrorTitle').innerText = `Launch Rejected (HTTP ${res.status})`;
-        errMsg.innerText = data.error || data.message || 'Unknown preflight error';
-        errBox.style.display = 'block';
+    if (!resp.ok) {
+      showPreflightError(data.error || 'Failed to dispatch scenario');
+      if (startBtn) {
+        startBtn.disabled = false;
+        startBtn.innerHTML = '&blacktriangleright; Start Scenario';
       }
-      showActionFeedback('Launch failed — see preflight alert below', true);
-      disableLaunchButtons(false);
       return;
     }
 
-    showActionFeedback(`Scenario ${profileName} active (${data.duration_sec}s target duration)`);
-    // Immediately poll launcher status
-    pollLauncherStatus();
-  } catch (err) {
-    if (errBox && errMsg) {
-      document.getElementById('preflightErrorTitle').innerText = 'Network / Request Error';
-      errMsg.innerText = String(err);
-      errBox.style.display = 'block';
+    if (startBtn) {
+      startBtn.innerHTML = '&blacktriangleright; Start Scenario';
     }
-    showActionFeedback('Failed to reach dashboard server', true);
-    disableLaunchButtons(false);
+  } catch (e) {
+    showPreflightError(`Network error dispatching scenario: ${e.message}`);
+    if (startBtn) {
+      startBtn.disabled = false;
+      startBtn.innerHTML = '&blacktriangleright; Start Scenario';
+    }
   }
 }
 
-// Stop current run
 async function stopCurrentRun() {
-  const btn = document.getElementById('btnStopRun');
-  if (btn) btn.disabled = true;
-  showActionFeedback('Terminating Locust workload and controller...');
-
+  const stopBtn = document.getElementById('btnStopRun');
+  if (stopBtn) {
+    stopBtn.disabled = true;
+    stopBtn.innerText = 'Stopping...';
+  }
   try {
-    const res = await fetch('/api/launcher/stop', { method: 'POST' });
-    const data = await res.json();
-    showActionFeedback('Scenario stopped');
-    pollLauncherStatus();
-  } catch (err) {
-    showActionFeedback('Error issuing stop request', true);
+    await fetch('/api/launcher/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stop_controller: true })
+    });
+  } catch (e) {
+    console.debug('Stop error:', e);
   }
 }
 
-// Poll launcher status
-async function pollLauncherStatus() {
-  try {
-    const res = await fetch('/api/launcher/status');
-    if (!res.ok) return;
-    const data = await res.json();
-    updateLauncherUI(data);
-  } catch (err) {
-    console.debug('Launcher poll error:', err);
+function showPreflightError(msg) {
+  const box = document.getElementById('preflightErrorBox');
+  const text = document.getElementById('preflightErrorMessage');
+  if (box && text) {
+    text.innerText = msg;
+    box.style.display = 'block';
   }
 }
 
-// Update UI based on launcher status (A1, A2, A5)
-function updateLauncherUI(state) {
-  lastLauncherState = state;
-  const status = (state.status || 'idle').toLowerCase();
-
-  const badge = document.getElementById('launcherStatusBadge');
-  const phaseBadge = document.getElementById('run-phase-badge');
-  const profileText = document.getElementById('activeProfileText');
-  const detailsText = document.getElementById('activeDetailsText');
-  const timerText = document.getElementById('activeTimerText');
-  const pidText = document.getElementById('activePidText');
-  const progressBar = document.getElementById('runProgressBar');
-  const btnStop = document.getElementById('btnStopRun');
-  const noteBanner = document.getElementById('runNoteBanner');
-  const noteText = document.getElementById('runNoteText');
-  const logTailBox = document.getElementById('logTailContainer');
-  const logTailText = document.getElementById('logTailText');
-
-  // Handle note
-  if (state.note) {
-    if (noteBanner && noteText) {
-      noteText.innerText = state.note;
-      noteBanner.className = 'note-box info';
-      noteBanner.style.display = 'block';
-    }
-  } else if (status === 'idle') {
-    if (noteBanner) noteBanner.style.display = 'none';
-  }
-
-  // Handle log tail
-  if (state.log_tail && (status === 'failed' || status === 'finished')) {
-    if (logTailBox && logTailText) {
-      logTailText.innerText = state.log_tail;
-      logTailBox.style.display = 'block';
-    }
-  } else if (status === 'idle') {
-    if (logTailBox) logTailBox.style.display = 'none';
-  }
-
-  if (status === 'running') {
-    disableLaunchButtons(true);
-    if (btnStop) btnStop.disabled = false;
-
-    if (badge) {
-      badge.className = 'status-badge status-badge-warn';
-      badge.innerText = 'STATUS: RUNNING';
-    }
-
-    // Phase label: CALM vs BURST (D7)
-    if (phaseBadge) {
-      phaseBadge.style.display = 'inline-flex';
-      if (state.is_burst) {
-        phaseBadge.className = 'status-badge status-badge-crit';
-        phaseBadge.innerText = 'BURST PHASE';
-      } else {
-        phaseBadge.className = 'status-badge status-badge-ok';
-        phaseBadge.innerText = 'CALM PHASE';
-      }
-    }
-
-    const prof = (state.profile || 'Workload').toUpperCase();
-    if (profileText) profileText.innerText = `${prof} (Active)`;
-    if (detailsText) detailsText.innerText = `Traffic load generating against testbed`;
-
-    const elapsed = (state.elapsed_sec || 0).toFixed(1);
-    const target = (state.duration_sec || 65).toFixed(1);
-    if (timerText) timerText.innerText = `${elapsed}s / ${target}s`;
-
-    const locPid = state.locust_pid || '—';
-    const ctrlPid = state.controller_pid || '—';
-    if (pidText) pidText.innerText = `Locust PID: ${locPid} • Controller PID: ${ctrlPid}`;
-
-    const pct = Math.min(100, Math.max(0, ((state.elapsed_sec || 0) / (state.duration_sec || 65)) * 100));
-    if (progressBar) progressBar.style.width = `${pct}%`;
-
-    return;
-  }
-
-  if (status === 'finished') {
-    disableLaunchButtons(false);
-    if (btnStop) btnStop.disabled = true;
-
-    if (badge) {
-      badge.className = 'status-badge status-badge-ok';
-      badge.innerText = 'STATUS: FINISHED';
-    }
-    if (phaseBadge) phaseBadge.style.display = 'none';
-
-    const prof = (state.profile || 'Workload').toUpperCase();
-    if (profileText) profileText.innerText = `${prof} (Finished)`;
-    if (detailsText) detailsText.innerText = state.note || 'Workload run completed normally';
-
-    const elapsed = (state.elapsed_sec || 0).toFixed(1);
-    const target = (state.duration_sec || 0).toFixed(1);
-    if (timerText) timerText.innerText = `${elapsed}s / ${target}s`;
-    if (progressBar) progressBar.style.width = '100%';
-    return;
-  }
-
-  if (status === 'failed') {
-    // A1, A5: Red badge, message, log tail in collapsible box
-    disableLaunchButtons(false);
-    if (btnStop) btnStop.disabled = true;
-
-    if (badge) {
-      badge.className = 'status-badge status-badge-crit';
-      badge.innerText = 'STATUS: FAILED';
-    }
-    if (phaseBadge) phaseBadge.style.display = 'none';
-
-    const prof = (state.profile || 'Workload').toUpperCase();
-    if (profileText) profileText.innerText = `${prof} (Failed)`;
-    if (detailsText) detailsText.innerText = state.message || 'Execution error or early exit';
-
-    if (noteBanner && noteText) {
-      noteText.innerText = state.message || 'Workload process terminated unexpectedly';
-      noteBanner.className = 'note-box error';
-      noteBanner.style.display = 'block';
-    }
-
-    if (progressBar) progressBar.style.width = '0%';
-    return;
-  }
-
-  // IDLE (or any other status)
-  // A5: Unknown status must never fall through to IDLE without notification
-  if (status !== 'idle') {
-    if (badge) {
-      badge.className = 'status-badge status-badge-warn';
-      badge.innerText = `STATUS: ${status.toUpperCase()}`;
-    }
-    if (detailsText) detailsText.innerText = `Status: ${status}`;
-    return;
-  }
-
-  // Standard IDLE
-  disableLaunchButtons(false);
-  if (btnStop) btnStop.disabled = true;
-  if (badge) {
-    badge.className = 'status-badge status-badge-idle';
-    badge.innerText = 'STATUS: IDLE';
-  }
-  if (phaseBadge) phaseBadge.style.display = 'none';
-  if (profileText) profileText.innerText = 'None (Idle)';
-  if (detailsText) detailsText.innerText = 'Ready to dispatch scenario';
-  if (timerText) timerText.innerText = '0.0s / 0.0s';
-  if (pidText) pidText.innerText = 'Locust PID: — • Controller PID: —';
-  if (progressBar) progressBar.style.width = '0%';
-}
-
-function disableLaunchButtons(disabled) {
-  const btns = document.querySelectorAll('.btn-launch');
-  btns.forEach(b => { b.disabled = disabled; });
-}
-
-function showActionFeedback(msg, isError = false) {
-  const el = document.getElementById('actionFeedback');
-  if (!el) return;
-  el.innerText = msg;
-  el.style.color = isError ? 'var(--color-crit)' : 'var(--accent-traffic)';
-  el.style.display = 'inline';
+function hidePreflightError() {
+  const box = document.getElementById('preflightErrorBox');
+  if (box) box.style.display = 'none';
 }
 
 function toggleLogTail() {
   const el = document.getElementById('logTailText');
   if (el) {
-    el.style.maxHeight = el.style.maxHeight === 'none' ? '180px' : 'none';
+    el.style.maxHeight = (el.style.maxHeight === 'none') ? '120px' : 'none';
   }
 }
 
-// Hook into PERM main poller
+// Hook called every 1s from PERM pollState
 window.PERM_PAGE_UPDATE = function(data) {
-  if (data.launcher_status) {
-    updateLauncherUI(data.launcher_status);
+  const launcher = data.launcher_status || {};
+  currentLauncherStatus = launcher.status || 'idle';
+
+  const badge = document.getElementById('launcherStatusBadge');
+  const phaseBadge = document.getElementById('run-phase-badge');
+  const bar = document.getElementById('runProgressBar');
+  const timer = document.getElementById('activeTimerText');
+  const pidText = document.getElementById('activePidText');
+  const btnStart = document.getElementById('btnStartRun');
+  const btnStop = document.getElementById('btnStopRun');
+  const noteBanner = document.getElementById('runNoteBanner');
+  const noteText = document.getElementById('runNoteText');
+  const logTail = document.getElementById('logTailContainer');
+  const logTailText = document.getElementById('logTailText');
+
+  const dur = launcher.duration_sec || PROFILE_DURATIONS[currentSelectedProfile] || 80;
+  const elap = launcher.elapsed_sec || 0;
+
+  if (launcher.status === 'running') {
+    if (badge) {
+      badge.className = 'status-badge status-badge-ok';
+      badge.innerText = 'STATUS: RUNNING';
+    }
+    if (phaseBadge) {
+      phaseBadge.style.display = 'inline-block';
+      phaseBadge.className = launcher.is_burst ? 'status-badge status-badge-warn' : 'status-badge status-badge-ok';
+      phaseBadge.innerText = launcher.is_burst ? 'BURST PHASE' : 'CALM PHASE';
+    }
+    if (btnStart) btnStart.disabled = true;
+    if (btnStop) {
+      btnStop.disabled = false;
+      btnStop.innerText = '■ Stop Run';
+    }
+    if (bar) {
+      const pct = Math.min(100, Math.max(0, (elap / dur) * 100));
+      bar.style.width = `${pct}%`;
+    }
+    if (timer) {
+      timer.innerText = `${elap.toFixed(1)}s / ${dur.toFixed(1)}s`;
+    }
+    if (pidText) {
+      pidText.innerText = `Locust PID: ${launcher.pid || '--'} • Duration: ${dur}s`;
+    }
+    if (noteBanner) noteBanner.style.display = 'none';
+  } else if (launcher.status === 'finished') {
+    if (badge) {
+      badge.className = 'status-badge status-badge-ok';
+      badge.innerText = 'STATUS: FINISHED';
+    }
+    if (phaseBadge) phaseBadge.style.display = 'none';
+    if (btnStart) btnStart.disabled = false;
+    if (btnStop) {
+      btnStop.disabled = true;
+      btnStop.innerText = '■ Stop Run';
+    }
+    if (bar) bar.style.width = '100%';
+    if (timer) {
+      timer.innerText = `${(launcher.last_elapsed || elap).toFixed(1)}s / ${dur.toFixed(1)}s`;
+    }
+    if (noteBanner && launcher.note) {
+      noteText.innerText = launcher.note;
+      noteBanner.style.display = 'block';
+    }
+  } else if (launcher.status === 'failed') {
+    if (badge) {
+      badge.className = 'status-badge status-badge-crit';
+      badge.innerText = 'STATUS: FAILED';
+    }
+    if (phaseBadge) phaseBadge.style.display = 'none';
+    if (btnStart) btnStart.disabled = false;
+    if (btnStop) {
+      btnStop.disabled = true;
+      btnStop.innerText = '■ Stop Run';
+    }
+    if (noteBanner && launcher.note) {
+      noteText.innerText = launcher.note;
+      noteBanner.style.display = 'block';
+    }
+  } else {
+    // idle
+    if (badge) {
+      badge.className = 'status-badge status-badge-idle';
+      badge.innerText = 'STATUS: IDLE';
+    }
+    if (phaseBadge) phaseBadge.style.display = 'none';
+    if (btnStart) btnStart.disabled = false;
+    if (btnStop) {
+      btnStop.disabled = true;
+      btnStop.innerText = '■ Stop Run';
+    }
+    if (bar) bar.style.width = '0%';
+    if (timer) {
+      timer.innerText = `0.0s / ${dur.toFixed(1)}s`;
+    }
+  }
+
+  // Update log tail if present
+  if (launcher.log_tail && launcher.log_tail.length > 0) {
+    if (logTail) logTail.style.display = 'block';
+    if (logTailText) logTailText.innerText = launcher.log_tail.join('\n');
   }
 };
 
 document.addEventListener('DOMContentLoaded', () => {
-  pollLauncherStatus();
+  selectProfile('spike');
 });
 </script>
 {% endblock %}

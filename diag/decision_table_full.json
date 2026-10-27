@@ -1,0 +1,223 @@
+[
+  {
+    "profile": "flat_4",
+    "total_samples": 131,
+    "first_scale_up_t": 9.03,
+    "first_scale_up_workers": 3,
+    "forecast_at_warmup": 9.119,
+    "upper_at_warmup": 14.196,
+    "pred_target_at_warmup": 3,
+    "load_change_t": 40.04,
+    "scaled_before_load": true,
+    "workers_timeline": [
+      [
+        0.03,
+        2
+      ],
+      [
+        9.03,
+        3
+      ],
+      [
+        11.03,
+        4
+      ],
+      [
+        15.03,
+        5
+      ],
+      [
+        17.03,
+        7
+      ],
+      [
+        19.03,
+        8
+      ]
+    ]
+  },
+  {
+    "profile": "step_late",
+    "total_samples": 132,
+    "first_scale_up_t": 10.04,
+    "first_scale_up_workers": 3,
+    "forecast_at_warmup": 4.06,
+    "upper_at_warmup": 9.136,
+    "pred_target_at_warmup": 2,
+    "load_change_t": 41.14,
+    "scaled_before_load": true,
+    "workers_timeline": [
+      [
+        0.03,
+        2
+      ],
+      [
+        10.04,
+        3
+      ],
+      [
+        14.04,
+        4
+      ],
+      [
+        15.04,
+        3
+      ],
+      [
+        16.04,
+        4
+      ],
+      [
+        19.05,
+        5
+      ],
+      [
+        28.05,
+        7
+      ],
+      [
+        33.06,
+        8
+      ]
+    ]
+  },
+  {
+    "profile": "ramp_late",
+    "total_samples": 132,
+    "first_scale_up_t": 9.02,
+    "first_scale_up_workers": 4,
+    "forecast_at_warmup": 11.801,
+    "upper_at_warmup": 16.878,
+    "pred_target_at_warmup": 4,
+    "load_change_t": 41.03,
+    "scaled_before_load": true,
+    "workers_timeline": [
+      [
+        0.01,
+        2
+      ],
+      [
+        9.02,
+        4
+      ],
+      [
+        10.02,
+        3
+      ],
+      [
+        12.02,
+        4
+      ],
+      [
+        13.02,
+        3
+      ],
+      [
+        14.02,
+        4
+      ],
+      [
+        17.02,
+        5
+      ],
+      [
+        18.02,
+        6
+      ],
+      [
+        20.02,
+        7
+      ],
+      [
+        22.02,
+        8
+      ]
+    ]
+  },
+  {
+    "profile": "step",
+    "total_samples": 134,
+    "first_scale_up_t": 9.02,
+    "first_scale_up_workers": 6,
+    "forecast_at_warmup": 26.658,
+    "upper_at_warmup": 31.734,
+    "pred_target_at_warmup": 6,
+    "load_change_t": 40.03,
+    "scaled_before_load": true,
+    "workers_timeline": [
+      [
+        0.01,
+        2
+      ],
+      [
+        9.02,
+        6
+      ],
+      [
+        10.02,
+        3
+      ],
+      [
+        21.02,
+        5
+      ],
+      [
+        32.02,
+        7
+      ],
+      [
+        38.03,
+        8
+      ],
+      [
+        39.03,
+        7
+      ],
+      [
+        40.03,
+        8
+      ],
+      [
+        115.06,
+        7
+      ],
+      [
+        116.06,
+        8
+      ]
+    ]
+  },
+  {
+    "profile": "ramp",
+    "total_samples": 133,
+    "first_scale_up_t": 10.02,
+    "first_scale_up_workers": 3,
+    "forecast_at_warmup": 4.06,
+    "upper_at_warmup": 9.136,
+    "pred_target_at_warmup": 2,
+    "load_change_t": 40.03,
+    "scaled_before_load": true,
+    "workers_timeline": [
+      [
+        0.01,
+        2
+      ],
+      [
+        10.02,
+        3
+      ],
+      [
+        18.02,
+        5
+      ],
+      [
+        28.02,
+        7
+      ],
+      [
+        33.02,
+        8
+      ]
+    ]
+  }
+]

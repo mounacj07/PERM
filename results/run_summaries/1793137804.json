@@ -1,0 +1,12 @@
+{
+  "timestamp": 1793137804,
+  "burst_onset_time": 6.02,
+  "first_scale_up_time": 16.07,
+  "lead_time_seconds": -10.05,
+  "peak_workers": 8,
+  "worker_seconds": 580,
+  "over_provision_ratio": 5.834,
+  "seconds_util_gt_85": 0,
+  "seconds_queue_ge_15": 0,
+  "dropped_requests": 0
+}
