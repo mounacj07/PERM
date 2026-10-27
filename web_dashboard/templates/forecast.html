@@ -1,19 +1,501 @@
 {% extends "base.html" %}
-{% block title %}PERM — Forecast{% endblock %}
+{% block title %}PERM — Demand Forecast & Sizing{% endblock %}
+
+{% block extra_head %}
+<style>
+  .forecast-toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 0.85rem 1.25rem;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .mode-switch-group {
+    display: flex;
+    background: #090e17;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 3px;
+  }
+
+  .mode-switch-btn {
+    padding: 6px 14px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .mode-switch-btn.active {
+    background: #1e293b;
+    color: var(--text-heading);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .replay-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+
+  .select-input {
+    background: #090e17;
+    border: 1px solid var(--border-color);
+    color: var(--text-heading);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-family: inherit;
+  }
+
+  .btn-ctrl {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn-ctrl:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-heading);
+  }
+
+  .btn-ctrl.active {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #38bdf8;
+  }
+
+  .scrubber-slider {
+    width: 140px;
+    cursor: pointer;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-note">
-  <span>📈</span>
-  <strong id="forecast-banner-text">ST-AGBDT trained offline; replay uses runs not used in training</strong>
+<!-- Top Toolbar: Mode Switch & Replay Controls -->
+<div class="forecast-toolbar">
+  <div class="mode-switch-group">
+    <button class="mode-switch-btn active" id="btn-tab-replay" onclick="switchTab('replay')">📺 REPLAY STREAM</button>
+    <button class="mode-switch-btn" id="btn-tab-live" onclick="switchTab('live')">⚡ LIVE STREAM</button>
+  </div>
+
+  <div class="replay-controls" id="replay-controls-bar">
+    <select id="run-select" class="select-input" onchange="loadReplayRun()">
+      <option value="random_mix_seed20">random_mix_seed20 (Test - Held Out)</option>
+    </select>
+
+    <div class="mode-switch-group">
+      <button class="mode-switch-btn active" id="speed-1x" onclick="setSpeed(1)">1x</button>
+      <button class="mode-switch-btn" id="speed-5x" onclick="setSpeed(5)">5x</button>
+      <button class="mode-switch-btn" id="speed-10x" onclick="setSpeed(10)">10x</button>
+    </div>
+
+    <button class="btn-ctrl" id="btn-play-pause" onclick="togglePlay()">⏸ Pause</button>
+    <button class="btn-ctrl" onclick="resetReplay()">↺ Reset</button>
+
+    <input type="range" id="time-scrubber" class="scrubber-slider" min="0" max="100" value="0" oninput="onScrub(this.value)">
+    <span class="mono" id="replay-time-display" style="font-size:0.8rem; color:var(--text-muted); width: 60px;">0s</span>
+  </div>
 </div>
-<div id="forecast-container">
+
+<!-- Dynamic Banner -->
+<div class="page-note" id="forecast-banner">
+  <span id="banner-icon">🎯</span>
+  <strong id="banner-text">ST-AGBDT trained offline; replay uses runs not used in training</strong>
+</div>
+
+<!-- KPI Cards Row -->
+<div class="grid-kpi">
+  <div class="card card-kpi kpi-arrivals">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Current Demand (Arrivals)</span>
+      <span class="card-tag mono">y(t)</span>
+    </div>
+    <div class="card-value num" id="val-curr-arr" style="color: var(--color-primary);">-- req/s</div>
+    <div class="card-subtext" id="sub-curr-arr">3s Smoothed: -- req/s</div>
+  </div>
+
+  <div class="card card-kpi kpi-latency">
+    <div class="card-header-sm">
+      <span class="card-title-sm">ST-AGBDT Forecast (h=20s)</span>
+      <span class="card-tag mono">ŷ(t+20)</span>
+    </div>
+    <div class="card-value num" id="val-forecast" style="color: #60a5fa;">-- req/s</div>
+    <div class="card-subtext">Expectile: α = 0.85</div>
+  </div>
+
+  <div class="card card-kpi kpi-queue">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Conformal Upper Bound</span>
+      <span class="card-tag mono">90% COVERAGE</span>
+    </div>
+    <div class="card-value num" id="val-upper-bound" style="color: var(--color-warning);">-- req/s</div>
+    <div class="card-subtext" id="sub-margin">Margin: +5.076 req/s</div>
+  </div>
+
+  <div class="card card-kpi kpi-workers">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Recommended Workers</span>
+      <span class="card-tag mono">SIZING</span>
+    </div>
+    <div class="card-value num" id="val-rec-workers" style="color: var(--color-purple);">--</div>
+    <div class="card-subtext" id="sub-act-workers">Actual Required: -- Workers</div>
+  </div>
+</div>
+
+<!-- Charts Grid -->
+<div class="grid-charts">
   <div class="card">
     <div class="chart-header">
-      <span class="chart-title-text">Demand Forecast & Capacity Sizing</span>
+      <span class="chart-title-text">Demand vs. Forecast & Conformal Bound (h=20s)</span>
+      <span style="font-size:0.75rem; color:var(--text-muted);">Blue = Actual, Dashed = Forecast, Amber = Bound</span>
     </div>
-    <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
-      Forecast module initializing...
+    <div class="chart-wrapper">
+      <canvas id="chart-forecast-demand"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Recommended Workers vs. Required by Actual Demand</span>
+      <span style="font-size:0.75rem; color:var(--text-muted);">Capacity Sizing Comparison</span>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="chart-workers-sizing"></canvas>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let currentTab = 'replay';
+let replayRecords = [];
+let replayIndex = 0;
+let replayTimer = null;
+let replaySpeed = 1;
+let isPlaying = false;
+
+let forecastDemandChart = null;
+let workersSizingChart = null;
+
+function initForecastCharts() {
+  const ctxDemand = document.getElementById('chart-forecast-demand').getContext('2d');
+  forecastDemandChart = new Chart(ctxDemand, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Current Arrivals (req/s)',
+          data: [],
+          borderColor: '#94a3b8',
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.2,
+          order: 3
+        },
+        {
+          label: 'ST-AGBDT Forecast (20s)',
+          data: [],
+          borderColor: '#38bdf8',
+          borderWidth: 2,
+          borderDash: [4, 4],
+          pointRadius: 0,
+          tension: 0.25,
+          order: 2
+        },
+        {
+          label: 'Conformal Upper Bound',
+          data: [],
+          borderColor: '#f59e0b',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.25,
+          fill: true,
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', maxTicksLimit: 12 } },
+        y: { min: 0, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#64748b' } }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#cbd5e1', boxWidth: 12, usePointStyle: true } }
+      }
+    }
+  });
+
+  const ctxWorkers = document.getElementById('chart-workers-sizing').getContext('2d');
+  workersSizingChart = new Chart(ctxWorkers, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Recommended Workers',
+          data: [],
+          borderColor: '#a855f7',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          stepped: 'before',
+          fill: true,
+          backgroundColor: 'rgba(168, 85, 247, 0.08)',
+          order: 1
+        },
+        {
+          label: 'Workers Required by Actual Demand',
+          data: [],
+          borderColor: '#10b981',
+          borderWidth: 1.8,
+          borderDash: [3, 3],
+          stepped: 'before',
+          pointRadius: 0,
+          order: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#64748b', maxTicksLimit: 12 } },
+        y: { min: 1, max: 9, ticks: { stepSize: 1, color: '#64748b' }, grid: { color: 'rgba(255,255,255,0.04)' } }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#cbd5e1', boxWidth: 12, usePointStyle: true } }
+      }
+    }
+  });
+}
+
+async function loadRunOptions() {
+  try {
+    const res = await fetch('/api/forecast/runs');
+    if (!res.ok) return;
+    const data = await res.json();
+    const select = document.getElementById('run-select');
+    select.innerHTML = '';
+
+    const testGroup = document.createElement('optgroup');
+    testGroup.label = "Held-Out Test Runs (Not Used in Training)";
+    const calibGroup = document.createElement('optgroup');
+    calibGroup.label = "Calibration Runs";
+    const trainGroup = document.createElement('optgroup');
+    trainGroup.label = "Training Runs";
+
+    data.runs.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.run_id;
+      opt.innerText = `${r.run_id} (${r.split})`;
+      if (r.split === 'test') testGroup.appendChild(opt);
+      else if (r.split === 'calibration') calibGroup.appendChild(opt);
+      else trainGroup.appendChild(opt);
+    });
+
+    select.appendChild(testGroup);
+    select.appendChild(calibGroup);
+    select.appendChild(trainGroup);
+
+    loadReplayRun();
+  } catch (err) {
+    console.error('Failed to load runs:', err);
+  }
+}
+
+async function loadReplayRun() {
+  const runId = document.getElementById('run-select').value;
+  try {
+    const res = await fetch(`/api/forecast/replay?run_id=${runId}&horizon=20`);
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (!data.model_available) {
+      document.getElementById('forecast-banner').style.background = 'rgba(244, 63, 94, 0.12)';
+      document.getElementById('banner-text').innerText = 'Model not available';
+      return;
+    }
+
+    document.getElementById('banner-text').innerText = data.banner;
+    document.getElementById('forecast-banner').style.background = data.is_training
+      ? 'rgba(245, 158, 11, 0.12)'
+      : 'rgba(56, 189, 248, 0.08)';
+
+    replayRecords = data.records || [];
+    replayIndex = 0;
+    document.getElementById('time-scrubber').max = Math.max(0, replayRecords.length - 1);
+    document.getElementById('time-scrubber').value = 0;
+
+    resetReplay();
+    playReplay();
+  } catch (err) {
+    console.error('Failed loading replay run:', err);
+  }
+}
+
+function updateReplayFrame(idx) {
+  if (idx < 0 || idx >= replayRecords.length) return;
+  const rec = replayRecords[idx];
+
+  document.getElementById('val-curr-arr').innerText = `${rec.current_arrivals.toFixed(1)} req/s`;
+  document.getElementById('sub-curr-arr').innerText = `3s Smoothed: ${rec.current_smoothed.toFixed(1)} req/s`;
+
+  document.getElementById('val-forecast').innerText = `${rec.raw_forecast.toFixed(1)} req/s`;
+  document.getElementById('val-upper-bound').innerText = `${rec.upper_bound.toFixed(1)} req/s`;
+  document.getElementById('sub-margin').innerText = `Margin: +${rec.conformal_margin.toFixed(2)} req/s`;
+
+  document.getElementById('val-rec-workers').innerText = `${rec.recommended_workers} Workers`;
+  document.getElementById('sub-act-workers').innerText = `Actual Required: ${rec.actual_workers_needed} Workers`;
+
+  document.getElementById('time-scrubber').value = idx;
+  document.getElementById('replay-time-display').innerText = `${rec.second}s`;
+
+  const windowSlice = replayRecords.slice(0, idx + 1);
+  const labels = windowSlice.map(r => `${r.second}s`);
+
+  forecastDemandChart.data.labels = labels;
+  forecastDemandChart.data.datasets[0].data = windowSlice.map(r => r.current_arrivals);
+  forecastDemandChart.data.datasets[1].data = windowSlice.map(r => r.raw_forecast);
+  forecastDemandChart.data.datasets[2].data = windowSlice.map(r => r.upper_bound);
+  forecastDemandChart.update('none');
+
+  workersSizingChart.data.labels = labels;
+  workersSizingChart.data.datasets[0].data = windowSlice.map(r => r.recommended_workers);
+  workersSizingChart.data.datasets[1].data = windowSlice.map(r => r.actual_workers_needed);
+  workersSizingChart.update('none');
+}
+
+function playReplay() {
+  if (replayTimer) clearInterval(replayTimer);
+  isPlaying = true;
+  document.getElementById('btn-play-pause').innerText = '⏸ Pause';
+
+  const intervalMs = Math.max(20, Math.round(1000 / replaySpeed));
+  replayTimer = setInterval(() => {
+    if (replayIndex < replayRecords.length) {
+      updateReplayFrame(replayIndex);
+      replayIndex++;
+    } else {
+      pauseReplay();
+    }
+  }, intervalMs);
+}
+
+function pauseReplay() {
+  if (replayTimer) clearInterval(replayTimer);
+  replayTimer = null;
+  isPlaying = false;
+  document.getElementById('btn-play-pause').innerText = '▶ Play';
+}
+
+function togglePlay() {
+  if (isPlaying) pauseReplay();
+  else playReplay();
+}
+
+function resetReplay() {
+  pauseReplay();
+  replayIndex = 0;
+  updateReplayFrame(0);
+}
+
+function onScrub(val) {
+  replayIndex = parseInt(val, 10);
+  updateReplayFrame(replayIndex);
+}
+
+function setSpeed(speed) {
+  replaySpeed = speed;
+  document.getElementById('speed-1x').classList.toggle('active', speed === 1);
+  document.getElementById('speed-5x').classList.toggle('active', speed === 5);
+  document.getElementById('speed-10x').classList.toggle('active', speed === 10);
+  if (isPlaying) playReplay();
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.getElementById('btn-tab-replay').classList.toggle('active', tab === 'replay');
+  document.getElementById('btn-tab-live').classList.toggle('active', tab === 'live');
+  document.getElementById('replay-controls-bar').style.display = tab === 'replay' ? 'flex' : 'none';
+
+  if (tab === 'live') {
+    pauseReplay();
+    checkLiveForecast();
+  } else {
+    loadReplayRun();
+  }
+}
+
+async function checkLiveForecast() {
+  if (currentTab !== 'live') return;
+  try {
+    const res = await fetch('/api/forecast/live?horizon=20');
+    const data = await res.json();
+
+    const banner = document.getElementById('forecast-banner');
+    const bannerText = document.getElementById('banner-text');
+
+    if (data.status === 'offline') {
+      banner.style.background = 'rgba(244, 63, 94, 0.15)';
+      banner.style.borderColor = 'rgba(244, 63, 94, 0.4)';
+      bannerText.innerText = 'forecast service offline (Inference service not reachable on :5001 with PERM_FORECASTER=stagbdt)';
+      document.getElementById('val-forecast').innerText = 'offline';
+      document.getElementById('val-upper-bound').innerText = 'offline';
+      document.getElementById('val-rec-workers').innerText = 'offline';
+    } else {
+      banner.style.background = 'rgba(16, 185, 129, 0.12)';
+      banner.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+      bannerText.innerText = 'ST-AGBDT Live Stream Active (h=20s Forecast Horizon)';
+
+      document.getElementById('val-forecast').innerText = `${data.forecast.toFixed(1)} req/s`;
+      document.getElementById('val-upper-bound').innerText = `${data.upper_bound.toFixed(1)} req/s`;
+      document.getElementById('sub-margin').innerText = `Margin: +${data.conformal_margin.toFixed(2)} req/s`;
+      document.getElementById('val-rec-workers').innerText = `${data.recommended_workers} Workers`;
+    }
+  } catch (err) {
+    document.getElementById('banner-text').innerText = 'forecast service offline';
+  }
+}
+
+function onStateUpdate(data) {
+  if (currentTab === 'live') {
+    checkLiveForecast();
+    const telem = data.telemetry_latest || {};
+    if (telem.arrivals_count !== undefined) {
+      document.getElementById('val-curr-arr').innerText = `${telem.arrivals_count.toFixed(1)} req/s`;
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initForecastCharts();
+  loadRunOptions();
+});
+</script>
 {% endblock %}

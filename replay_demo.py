@@ -219,6 +219,7 @@ def replay_run(
         "mean_extra_workers": round(mean_extra, 4),
         "csv_path": csv_out_path,
         "png_path": png_out_path,
+        "records": replay_records,
     }
 
 

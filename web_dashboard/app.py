@@ -233,6 +233,108 @@ def create_app(service_urls: dict = None):
 
         return jsonify(snapshot)
 
+    @app.route("/api/forecast/runs", methods=["GET"])
+    def list_forecast_runs():
+        data_dir = os.path.join(PROJECT_ROOT, "data", "runs_locust")
+        cfg_file = os.path.join(PROJECT_ROOT, "models", "stagbdt_final_config.json")
+
+        training_ids = set()
+        calib_ids = set()
+        test_ids = set()
+        if os.path.exists(cfg_file):
+            try:
+                with open(cfg_file, "r", encoding="utf-8") as f:
+                    cfg = json.load(f)
+                splits = cfg.get("splits", {})
+                training_ids = set(splits.get("training_run_ids", []))
+                calib_ids = set(splits.get("calibration_run_ids", []))
+                test_ids = set(splits.get("test_run_ids", []))
+            except Exception:
+                pass
+
+        runs = []
+        if os.path.exists(data_dir):
+            for fname in sorted(os.listdir(data_dir)):
+                if fname.endswith(".csv") and not fname.startswith("sawtooth"):
+                    run_id = fname[:-4]
+                    is_train = run_id in training_ids
+                    split = "test" if run_id in test_ids else ("calibration" if run_id in calib_ids else ("training" if is_train else "held-out"))
+                    runs.append({
+                        "run_id": run_id,
+                        "filename": fname,
+                        "is_training": is_train,
+                        "split": split,
+                    })
+        return jsonify({"count": len(runs), "runs": runs})
+
+    @app.route("/api/forecast/replay", methods=["GET"])
+    def get_forecast_replay():
+        run_id = request.args.get("run_id", "random_mix_seed20")
+        horizon = request.args.get("horizon", default=20, type=int)
+
+        cfg_file = os.path.join(PROJECT_ROOT, "models", "stagbdt_final_config.json")
+        model_file = os.path.join(PROJECT_ROOT, f"models/stagbdt_h{horizon}_lean.json")
+        if not (os.path.exists(cfg_file) and os.path.exists(model_file)):
+            return jsonify({
+                "model_available": False,
+                "error": "model not available",
+                "schema": {
+                    "second": "int",
+                    "current_arrivals": "float",
+                    "raw_forecast": "float",
+                    "upper_bound": "float",
+                    "recommended_workers": "int",
+                    "actual_workers_needed": "int"
+                },
+                "sample": [
+                    {"second": 10, "current_arrivals": 4.0, "raw_forecast": 4.1, "upper_bound": 9.2, "recommended_workers": 2, "actual_workers_needed": 2}
+                ]
+            })
+
+        try:
+            from replay_demo import replay_run
+            res = replay_run(run_id, horizon=horizon, save_artifacts=False)
+
+            with open(cfg_file, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            training_ids = set(cfg.get("splits", {}).get("training_run_ids", []))
+            is_training = run_id in training_ids
+            banner = (
+                "Training run: This run was used during offline model training."
+                if is_training
+                else "ST-AGBDT trained offline; replay uses runs not used in training"
+            )
+            return jsonify({
+                "model_available": True,
+                "run_id": run_id,
+                "horizon": horizon,
+                "is_training": is_training,
+                "banner": banner,
+                "summary": {
+                    "mae": res.get("mae", 0.0),
+                    "miss_pct": res.get("miss_pct", 0.0),
+                    "mean_extra": res.get("mean_extra_workers", 0.0),
+                    "valid_steps": res.get("valid_steps", 0),
+                },
+                "records": res.get("records", []),
+            })
+        except Exception as exc:
+            return jsonify({"model_available": False, "error": str(exc)}), 500
+
+    @app.route("/api/forecast/live", methods=["GET"])
+    def get_forecast_live():
+        horizon = request.args.get("horizon", default=20, type=int)
+        try:
+            r = _http_session.get(f"{inference_url}/forecast/demand?horizon={horizon}", timeout=1.5)
+            if r.status_code == 200:
+                data = r.json()
+                data["status"] = "online"
+                return jsonify(data)
+            else:
+                return jsonify({"status": "offline", "message": "forecast service offline"}), 200
+        except Exception:
+            return jsonify({"status": "offline", "message": "forecast service offline"}), 200
+
     @app.route("/api/scaling/mode", methods=["POST"])
     def set_mode():
         try:
