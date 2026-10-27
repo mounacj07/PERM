@@ -389,11 +389,11 @@
       <a href="/latency" class="nav-link {% if active_page == 'latency' %}active{% endif %}">⏱️ Latency</a>
       <a href="/forecast" class="nav-link {% if active_page == 'forecast' %}active{% endif %}">📈 Forecast</a>
       <a href="/alerts" class="nav-link {% if active_page == 'alerts' %}active{% endif %}">🚨 Alerts & Scaling</a>
-      <a href="/experiments" class="nav-link {% if active_page == 'experiments' %}active{% endif %}">🧪 Experiments</a>
+      <a href="/experiments" class="nav-link {% if active_page == 'experiments' %}active{% endif %}">🚀 Scenario launcher</a>
     </nav>
 
     <div class="header-status">
-      <span class="mode-pill mono" id="global-mode-label">PERM v0 (old model)</span>
+      <span class="mode-pill mono" id="global-mode-label">Controller not running</span>
     </div>
   </header>
 
@@ -401,6 +401,11 @@
   <main class="page-container">
     {% block content %}{% endblock %}
   </main>
+
+  <!-- Global Disclaimer Footer -->
+  <footer class="page-footer" style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border-color); margin-top: 3rem;">
+    <p style="margin: 0;">Prototype demo on one machine with synthetic Locust traffic. Not an experimental result; closed-loop benefit over reactive scaling is not measured.</p>
+  </footer>
 
   <!-- Global Shared Poller Script -->
   <script>
@@ -413,10 +418,9 @@
         if (res.ok) {
           const data = await res.json();
           _latestState = data;
-          if (data.controller_state && data.controller_state.mode) {
-            const el = document.getElementById('global-mode-label');
-            if (el) el.innerText = "DEMO CONTROLLER: " + data.controller_state.mode.toUpperCase();
-          }
+          const label = data.mode_label || data.model_mode_label || "Controller not running";
+          const el = document.getElementById('global-mode-label');
+          if (el) el.innerText = label;
           if (typeof onStateUpdate === 'function') {
             onStateUpdate(data);
           }

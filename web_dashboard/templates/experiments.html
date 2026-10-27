@@ -4,12 +4,15 @@
 {% block content %}
 <div class="card" style="margin-bottom: 1.5rem;">
   <div class="chart-header">
-    <span class="chart-title-text">Workload Scenario Launcher</span>
+    <span class="chart-title-text">Scenario launcher</span>
     <span id="launcherStatusBadge" class="badge badge-normal" style="font-size: 0.85rem; padding: 0.35rem 0.8rem;">
       STATUS: IDLE
     </span>
   </div>
-  <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem;">
+  <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.25rem; font-weight: 500;">
+    Launches demo traffic; not an experiment.
+  </p>
+  <p style="color: var(--text-muted); font-size: 0.8rem; margin-top: 0.15rem;">
     Trigger open-loop synthetic load profiles via headless Locust. Dispatches seeded Poisson-scheduled requests directly against the testbed. Only one run can be active at a time.
   </p>
 

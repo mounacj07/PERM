@@ -126,7 +126,7 @@ function onStateUpdate(data) {
   const capEvents = capacity.scale_events || [];
 
   // Mode label
-  const modeLabel = data.model_mode_label || 'PERM v0 (old model)';
+  const modeLabel = data.mode_label || data.model_mode_label || 'Controller not running';
   const elMode = document.getElementById('alerts-mode-label');
   if (elMode) elMode.innerText = modeLabel;
 

@@ -24,6 +24,8 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from flask import Flask, render_template, jsonify, request
@@ -70,14 +72,66 @@ def _read_controller_status():
             pass
     return {}
 
-def compute_worker_cpu_active(worker_cpu_percent: float, active_workers: int, cpu_count: int = 16) -> float:
+def get_system_logical_cpus() -> int:
+    """Read logical CPUs from the system (defaulting to 16 if undetermined)."""
+    try:
+        cnt = os.cpu_count()
+        if cnt and cnt > 0:
+            return int(cnt)
+    except Exception:
+        pass
+    return 16
+
+def compute_worker_cpu_active(worker_cpu_percent: float, active_workers: int, cpu_count: Optional[int] = None) -> float:
     """
     Worker CPU (% of active workers) = clip(worker_cpu_percent * cpu_count / active_workers, 0, 100).
+    Reads logical_cpus from system if cpu_count is None.
     """
     if active_workers <= 0:
         return 0.0
+    if cpu_count is None:
+        cpu_count = get_system_logical_cpus()
     val = (float(worker_cpu_percent) * float(cpu_count)) / float(active_workers)
     return round(float(max(0.0, min(100.0, val))), 2)
+
+def get_controller_mode_label() -> str:
+    """
+    Mode label: read controller_status.json.
+    Show "Demo controller: <mode> (forecast online/offline)".
+    If the file is missing or older than 5 s, show "Controller not running".
+    """
+    if not os.path.exists(STATUS_JSON_PATH):
+        return "Controller not running"
+
+    try:
+        mtime = os.path.getmtime(STATUS_JSON_PATH)
+        now_epoch = time.time()
+        file_age = now_epoch - mtime
+
+        with open(STATUS_JSON_PATH, "r", encoding="utf-8") as f:
+            status = json.load(f)
+
+        ts_str = status.get("time")
+        if ts_str:
+            try:
+                ts_dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                now_dt = datetime.now(timezone.utc)
+                age_ts = (now_dt - ts_dt).total_seconds()
+                if age_ts > 5.0 or age_ts < -5.0:
+                    return "Controller not running"
+            except Exception:
+                if file_age > 5.0:
+                    return "Controller not running"
+        else:
+            if file_age > 5.0:
+                return "Controller not running"
+
+        mode = status.get("mode", "unknown")
+        forecast_online = bool(status.get("forecast_online", False))
+        fc_str = "forecast online" if forecast_online else "forecast offline"
+        return f"Demo controller: {mode} ({fc_str})"
+    except Exception:
+        return "Controller not running"
 
 # Defaults — overridable via CLI args (important for Docker deployments)
 _DEFAULT_COLLECTOR_URL    = "http://127.0.0.1:5000"
@@ -233,12 +287,10 @@ def create_app(service_urls: dict = None):
         snapshot["controller_status"] = ctrl_status
         snapshot["capacity"] = _cached_state.get("capacity", {})
 
-        # Mode label: 'PERM v0 (old model)' unless the final model is wired in live
-        if os.environ.get("PERM_FORECASTER", "").strip().lower() == "stagbdt":
-            model_mode_label = "ST-AGBDT (final model)"
-        else:
-            model_mode_label = "PERM v0 (old model)"
-        snapshot["model_mode_label"] = model_mode_label
+        # Mode label: read controller_status.json (show "Demo controller: <mode> (forecast online/offline)" or "Controller not running")
+        mode_label = get_controller_mode_label()
+        snapshot["mode_label"] = mode_label
+        snapshot["model_mode_label"] = mode_label
 
         worker_cpu_active = 0.0
         whole_cpu = 0.0
@@ -246,7 +298,7 @@ def create_app(service_urls: dict = None):
             telem = snapshot["telemetry_latest"]
             w_cpu = float(telem.get("worker_cpu_percent", 0.0))
             w_cnt = int(telem.get("active_workers", 2))
-            worker_cpu_active = compute_worker_cpu_active(w_cpu, w_cnt, 16)
+            worker_cpu_active = compute_worker_cpu_active(w_cpu, w_cnt)
             whole_cpu = float(telem.get("cpu_percent", 0.0))
 
         snapshot["worker_cpu_pct_active"] = worker_cpu_active

@@ -98,7 +98,7 @@ testpaths = tests
    - Configures `testpaths = tests` to ensure `pytest` runs the canonical test suite in `tests/` and does not scan untracked analysis directories (like `scratch/`).
 
 ### 1.4 Confirmation of Runtime Collector Behavior
-- The collector's runtime request execution, process pool worker handling, queueing, and telemetry logging are **100% identical and unchanged** from commit `86a5603231a12d210fab9e3d3cab193591c2beec` (Date: `Sun Oct 25 19:42:50 2026 +0530`), the version that produced the canonical dataset in `data/runs_locust`.
+- The collector's runtime request execution, process pool worker handling, queueing, and telemetry logging are **behaviour-equivalent at default settings** from commit `86a5603231a12d210fab9e3d3cab193591c2beec` (Date: `Sun Oct 25 19:42:50 2026 +0530`), the version that produced the canonical dataset in `data/runs_locust`.
 - **Note on Test Execution**: Both `test_testbed.py` and `test_system.py` explicitly start a live telemetry collector server in a child subprocess (`telemetry_collector.py`) as part of their test suites, and terminate it cleanly upon test completion.
 
 ---
@@ -275,12 +275,13 @@ Mean extra workers required to achieve a specified miss rate target across whole
 ### CAN:
 - A from-scratch, NumPy-only boosted-tree forecaster with an asymmetric (expectile) loss and conformal upper bounds, about 54 KB per horizon; online and offline features match to 1e-12.
 - On 13 held-out runs, raw ST-AGBDT MAE equals unpadded persistence at h=10 s (7.796 vs 7.793 req/s) and is lower in point estimate at h=20 s (9.93 vs 12.04) and h=30 s (11.32 vs 15.59); confidence intervals overlap, so significance is not established.
-- ST-AGBDT + 90% conformal reached 6.45% / 5.40% / 0.43% workers-needed miss at h = 10/20/30 s vs 11.50% / 11.19% / 0.77% for padded persistence, at similar or slightly higher extra-worker cost; operating points are not matched and confidence intervals overlap, so no dominance is claimed; at h=30 s the padded baselines are equivalent in practice.
+- ST-AGBDT + 90% conformal reached 6.45% / 5.40% / 0.43% workers-needed miss at h = 10/20/30 s vs 11.50% / 11.19% / 0.77% for padded persistence, at similar or slightly higher extra-worker cost; at h=10 s ST-AGBDT needs about 10-25% fewer extra workers at 5-10% miss (about 2% fewer at 1%); at h=30 s EWMA/peak-hold are as good or slightly better; all CIs overlap, no significance claimed.
 - The replay demo runs on held-out runs; headline run is random_mix_seed20; spike_seed44 shares its shape with training seeds (in-profile).
 
 ### CANNOT:
 - Any closed-loop benefit or any claim of beating reactive scaling (not tested).
 - That the MAE improvement is statistically significant.
+- ST-AGBDT shows no advantage over a simple peak-hold baseline at h = 20-30 s (raw MAE 9.65 vs 9.93 at 20 s; 10.46 vs 11.32 at 30 s; CIs overlap).
 - Any benefit from early exit (0% exited at a safe margin) or from flat arrays (slower per single sample); the "Self-Throttling" name is therefore unjustified.
 - Results for pure step or ramp traffic (no step/ramp runs in the test set).
 - Generalisation beyond the authors' synthetic generator; real traces, energy and real applications are untested.

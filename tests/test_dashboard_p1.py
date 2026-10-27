@@ -27,6 +27,17 @@ def test_worker_cpu_calculation_exact_spec():
     assert res2 == 50.0, f"Expected 50.0, got {res2}"
 
 
+def test_worker_cpu_calculation_mocked_8_cpus():
+    """
+    With 8 logical CPUs mocked, 8 active workers at worker_cpu_percent 100 gives 100.
+    Keeps 16-CPU calculation test intact above.
+    """
+    from unittest.mock import patch
+    with patch("web_dashboard.app.get_system_logical_cpus", return_value=8):
+        res = compute_worker_cpu_active(worker_cpu_percent=100.0, active_workers=8)
+        assert res == 100.0, f"Expected 100.0, got {res}"
+
+
 def test_routes_return_200(client):
     """
     P1 requirement:
