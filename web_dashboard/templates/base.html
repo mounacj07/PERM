@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}PERM Edge Control Center{% endblock %}</title>
+
+  <!-- Local Vendored Chart.js for 100% Offline Capability -->
+  <script src="/static/vendor/chart.js"></script>
+
+  <style>
+    :root {
+      --bg-base: #0b0f19;
+      --bg-surface: #111827;
+      --bg-surface-hover: #1f2937;
+      --bg-card: #151d30;
+      --border-color: #1e293b;
+      --border-subtle: #192338;
+
+      --color-primary: #38bdf8;
+      --color-success: #10b981;
+      --color-warning: #f59e0b;
+      --color-danger: #f43f5e;
+      --color-purple: #a855f7;
+
+      --text-heading: #f8fafc;
+      --text-main: #cbd5e1;
+      --text-muted: #64748b;
+      --text-dark: #475569;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at 50% -20%, #172033, var(--bg-base) 80%);
+      color: var(--text-main);
+      min-height: 100vh;
+      padding: 1.25rem 2rem;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .num { font-variant-numeric: tabular-nums; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+
+    /* Top Navbar */
+    .navbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.85rem 1.25rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      margin-bottom: 1.25rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 1.2rem;
+      color: #ffffff;
+      box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4);
+    }
+
+    .brand-title h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+
+    .brand-title p {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.1rem;
+    }
+
+    .live-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 2px 8px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .pulse-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: #34d399;
+      animation: pulse-dot 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.4); }
+    }
+
+    /* Navigation Links */
+    .nav-links {
+      display: flex;
+      gap: 0.4rem;
+      background: #090e17;
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 4px;
+    }
+
+    .nav-link {
+      padding: 7px 15px;
+      border-radius: 7px;
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      font-weight: 600;
+      transition: all 0.15s ease;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-link:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .nav-link.active {
+      background: #1e293b;
+      color: var(--text-heading);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .header-status {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .mode-pill {
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+    }
+
+    /* Page Container */
+    .page-container {
+      margin-top: 1.25rem;
+    }
+
+    /* Grid Layouts */
+    .grid-kpi {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .grid-charts {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .grid-full {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      transition: border-color 0.2s ease;
+    }
+
+    .card:hover {
+      border-color: #2e3d55;
+    }
+
+    .card-kpi {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 125px;
+    }
+
+    .card-kpi::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+
+    .kpi-workers::before { background: var(--color-purple); }
+    .kpi-arrivals::before { background: var(--color-primary); }
+    .kpi-latency::before { background: var(--color-success); }
+    .kpi-queue::before { background: var(--color-warning); }
+    .kpi-failures::before { background: var(--color-danger); }
+
+    .card-header-sm {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.35rem;
+    }
+
+    .card-title-sm {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .card-tag {
+      font-size: 0.68rem;
+      font-weight: 600;
+      color: var(--text-dark);
+      background: rgba(255, 255, 255, 0.03);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .card-value {
+      font-size: 1.9rem;
+      font-weight: 700;
+      color: var(--text-heading);
+      letter-spacing: -0.02em;
+      margin: 0.25rem 0;
+    }
+
+    .card-subtext {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    /* Page Note Banner */
+    .page-note {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: #bae6fd;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Charts */
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.85rem;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .chart-title-text {
+      font-size: 0.92rem;
+      font-weight: 700;
+      color: var(--text-heading);
+    }
+
+    .chart-wrapper {
+      position: relative;
+      height: 280px;
+      width: 100%;
+    }
+
+    .sparkline-wrapper {
+      position: relative;
+      height: 110px;
+      width: 100%;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 9px 12px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-color);
+      font-weight: 700;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-main);
+    }
+
+    tr:hover td {
+      background: var(--bg-surface-hover);
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    .status-badge-ok { background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+    .status-badge-warn { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+    .status-badge-crit { background: rgba(244, 63, 94, 0.12); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.25); }
+
+    @media (max-width: 900px) {
+      .grid-charts { grid-template-columns: 1fr; }
+      .navbar { flex-direction: column; gap: 0.75rem; align-items: stretch; }
+      .nav-links { overflow-x: auto; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+
+  <!-- Top Navbar -->
+  <header class="navbar">
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div class="brand-title">
+        <h1>
+          PERM Edge Control Center
+          <span class="live-indicator"><span class="pulse-dot"></span> LIVE</span>
+        </h1>
+        <p>Predictive Edge Resource Management & Real-Time Telemetry</p>
+      </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <nav class="nav-links">
+      <a href="/overview" class="nav-link {% if active_page == 'overview' %}active{% endif %}">📊 Overview</a>
+      <a href="/cpu" class="nav-link {% if active_page == 'cpu' %}active{% endif %}">⚡ CPU</a>
+      <a href="/latency" class="nav-link {% if active_page == 'latency' %}active{% endif %}">⏱️ Latency</a>
+      <a href="/forecast" class="nav-link {% if active_page == 'forecast' %}active{% endif %}">📈 Forecast</a>
+      <a href="/alerts" class="nav-link {% if active_page == 'alerts' %}active{% endif %}">🚨 Alerts & Scaling</a>
+      <a href="/experiments" class="nav-link {% if active_page == 'experiments' %}active{% endif %}">🧪 Experiments</a>
+    </nav>
+
+    <div class="header-status">
+      <span class="mode-pill mono" id="global-mode-label">PERM v0 (old model)</span>
+    </div>
+  </header>
+
+  <!-- Page Content Block -->
+  <main class="page-container">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Global Shared Poller Script -->
+  <script>
+    let _dashboardPollTimer = null;
+    let _latestState = null;
+
+    async function fetchState() {
+      try {
+        const res = await fetch('/api/dashboard/state');
+        if (res.ok) {
+          const data = await res.json();
+          _latestState = data;
+          if (data.controller_state && data.controller_state.mode) {
+            const el = document.getElementById('global-mode-label');
+            if (el) el.innerText = "DEMO CONTROLLER: " + data.controller_state.mode.toUpperCase();
+          }
+          if (typeof onStateUpdate === 'function') {
+            onStateUpdate(data);
+          }
+        }
+      } catch (err) {
+        console.debug('Dashboard fetch error:', err);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      fetchState();
+      _dashboardPollTimer = setInterval(fetchState, 1000);
+    });
+  </script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

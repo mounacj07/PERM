@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}PERM — Latency & SLO Monitor{% endblock %}
+
+{% block content %}
+<!-- Latency KPI Cards -->
+<div class="grid-kpi">
+  <div class="card card-kpi kpi-latency">
+    <div class="card-header-sm">
+      <span class="card-title-sm">P95 Response Latency</span>
+      <span class="card-tag mono">SLO 300ms</span>
+    </div>
+    <div class="card-value num" id="val-p95" style="color: var(--color-success);">-- ms</div>
+    <div class="card-subtext" id="sub-p95">Target Threshold: 300.0 ms</div>
+  </div>
+
+  <div class="card card-kpi kpi-arrivals">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Average Latency</span>
+      <span class="card-tag mono">MEAN</span>
+    </div>
+    <div class="card-value num" id="val-avg" style="color: var(--color-primary);">-- ms</div>
+    <div class="card-subtext">Unweighted window mean</div>
+  </div>
+
+  <div class="card card-kpi kpi-failures">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Failed Requests / Sec</span>
+      <span class="card-tag mono">TIMEOUT / 503</span>
+    </div>
+    <div class="card-value num" id="val-fails" style="color: var(--color-danger);">0.0 /s</div>
+    <div class="card-subtext" id="sub-fails">Cumulative Errors: 0</div>
+  </div>
+
+  <div class="card card-kpi kpi-queue">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Rejected Requests / Sec</span>
+      <span class="card-tag mono">SHEDDING</span>
+    </div>
+    <div class="card-value num" id="val-rejects" style="color: var(--color-warning);">0.0 /s</div>
+    <div class="card-subtext">Queue Overflow Rejections</div>
+  </div>
+</div>
+
+<!-- Latency Charts Row -->
+<div class="grid-charts">
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Response Latency vs. SLO Line (300ms)</span>
+      <span style="font-size:0.75rem; color:#f43f5e; font-weight:700;">── SLO Threshold: 300ms</span>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="chart-lat-full"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Failed & Rejected Requests Per Second</span>
+      <span style="font-size:0.75rem; color:var(--text-muted);">Errors vs. Load Shedding</span>
+    </div>
+    <div class="chart-wrapper">
+      <canvas id="chart-errors-full"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let latFullChart = null;
+let errorsFullChart = null;
+const SLO_THRESHOLD_MS = 300.0;
+
+function initLatencyCharts() {
+  const ctxLat = document.getElementById('chart-lat-full').getContext('2d');
+  latFullChart = new Chart(ctxLat, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'P95 Latency (ms)',
+          data: [],
+          borderColor: '#10b981',
+          borderWidth: 2.5,
+          pointRadius: 0,
+          tension: 0.25,
+          fill: true,
+          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+          order: 1
+        },
+        {
+          label: 'Average Latency (ms)',
+          data: [],
+          borderColor: '#38bdf8',
+          borderWidth: 1.8,
+          borderDash: [3, 3],
+          pointRadius: 0,
+          tension: 0.25,
+          fill: false,
+          order: 2
+        },
+        {
+          label: 'SLO Line (300 ms)',
+          data: [],
+          borderColor: 'rgba(244, 63, 94, 0.85)',
+          borderWidth: 1.5,
+          borderDash: [5, 4],
+          pointRadius: 0,
+          fill: false,
+          order: 3
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          ticks: { color: '#64748b', maxTicksLimit: 12 }
+        },
+        y: {
+          min: 0,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#64748b' }
+        }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#cbd5e1', boxWidth: 12, usePointStyle: true } }
+      }
+    }
+  });
+
+  const ctxErr = document.getElementById('chart-errors-full').getContext('2d');
+  errorsFullChart = new Chart(ctxErr, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Failed Requests / s',
+          data: [],
+          borderColor: '#f43f5e',
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.2,
+          fill: true,
+          backgroundColor: 'rgba(244, 63, 94, 0.1)'
+        },
+        {
+          label: 'Rejected Requests / s',
+          data: [],
+          borderColor: '#f59e0b',
+          borderWidth: 1.8,
+          borderDash: [3, 3],
+          pointRadius: 0,
+          tension: 0.2,
+          fill: false
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.03)' },
+          ticks: { color: '#64748b', maxTicksLimit: 12 }
+        },
+        y: {
+          min: 0,
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#64748b' }
+        }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#cbd5e1', boxWidth: 12, usePointStyle: true } }
+      }
+    }
+  });
+}
+
+function onStateUpdate(data) {
+  const telem = data.telemetry_latest || {};
+  const history = data.telemetry_history || [];
+
+  const p95 = telem.p95_latency_ms !== undefined ? telem.p95_latency_ms : 0.0;
+  const avg = telem.avg_latency_ms !== undefined ? telem.avg_latency_ms : 0.0;
+
+  const elP95 = document.getElementById('val-p95');
+  elP95.innerText = `${p95.toFixed(1)} ms`;
+  elP95.style.color = p95 >= SLO_THRESHOLD_MS ? '#f43f5e' : (p95 >= 200 ? '#f59e0b' : '#10b981');
+
+  document.getElementById('val-avg').innerText = `${avg.toFixed(1)} ms`;
+
+  const fails = telem.timeout_count !== undefined ? telem.timeout_count : (telem.error_count || 0);
+  const rejects = telem.rejected_count !== undefined ? telem.rejected_count : 0;
+
+  document.getElementById('val-fails').innerText = `${fails} /s`;
+  document.getElementById('sub-fails').innerText = `Cumulative: ${telem.error_count || 0}`;
+
+  document.getElementById('val-rejects').innerText = `${rejects} /s`;
+
+  if (history.length > 0) {
+    const labels = history.map(r => {
+      const d = new Date(r.timestamp);
+      return d.toLocaleTimeString([], { hour12: false, minute: '2-digit', second: '2-digit' });
+    });
+
+    const p95Series = history.map(r => r.p95_latency_ms || 0);
+    const avgSeries = history.map(r => r.avg_latency_ms || 0);
+    const sloSeries = new Array(labels.length).fill(SLO_THRESHOLD_MS);
+
+    latFullChart.data.labels = labels;
+    latFullChart.data.datasets[0].data = p95Series;
+    latFullChart.data.datasets[1].data = avgSeries;
+    latFullChart.data.datasets[2].data = sloSeries;
+    latFullChart.update('none');
+
+    const failsSeries = history.map(r => r.timeout_count !== undefined ? r.timeout_count : (r.error_count || 0));
+    const rejectsSeries = history.map(r => r.rejected_count !== undefined ? r.rejected_count : 0);
+
+    errorsFullChart.data.labels = labels;
+    errorsFullChart.data.datasets[0].data = failsSeries;
+    errorsFullChart.data.datasets[1].data = rejectsSeries;
+    errorsFullChart.update('none');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initLatencyCharts();
+});
+</script>
+{% endblock %}

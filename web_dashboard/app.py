@@ -57,6 +57,15 @@ def _read_controller_state():
             pass
     return {}
 
+def compute_worker_cpu_active(worker_cpu_percent: float, active_workers: int, cpu_count: int = 16) -> float:
+    """
+    Worker CPU (% of active workers) = clip(worker_cpu_percent * cpu_count / active_workers, 0, 100).
+    """
+    if active_workers <= 0:
+        return 0.0
+    val = (float(worker_cpu_percent) * float(cpu_count)) / float(active_workers)
+    return round(float(max(0.0, min(100.0, val))), 2)
+
 # Defaults — overridable via CLI args (important for Docker deployments)
 _DEFAULT_COLLECTOR_URL    = "http://127.0.0.1:5000"
 _DEFAULT_INFERENCE_URL    = "http://127.0.0.1:5001"
@@ -122,8 +131,32 @@ def create_app(service_urls: dict = None):
     app = Flask(__name__, template_folder="templates", static_folder="static")
 
     @app.route("/")
-    def index():
-        return render_template("index.html")
+    @app.route("/overview")
+    def overview():
+        if request.args.get("legacy") == "1":
+            return render_template("index.html")
+        return render_template("overview.html", active_page="overview")
+
+    @app.route("/cpu")
+    def cpu():
+        return render_template("cpu.html", active_page="cpu")
+
+    @app.route("/latency")
+    def latency():
+        return render_template("latency.html", active_page="latency")
+
+    @app.route("/forecast")
+    def forecast():
+        return render_template("forecast.html", active_page="forecast")
+
+    @app.route("/alerts")
+    @app.route("/scaling")
+    def alerts():
+        return render_template("alerts.html", active_page="alerts")
+
+    @app.route("/experiments")
+    def experiments():
+        return render_template("experiments.html", active_page="experiments")
 
     @app.route("/api/dashboard/state", methods=["GET"])
     def get_state():
@@ -180,12 +213,22 @@ def create_app(service_urls: dict = None):
         snapshot["controller_events"] = ctrl_events
         snapshot["controller_state"] = ctrl_state
 
-        pool_util = ctrl_state.get("smoothed_util")
-        if pool_util is None and snapshot.get("telemetry_latest"):
+        worker_cpu_active = 0.0
+        whole_cpu = 0.0
+        if snapshot.get("telemetry_latest"):
             telem = snapshot["telemetry_latest"]
-            worker_cpu = float(telem.get("worker_cpu_percent", 0.0))
-            workers = int(telem.get("active_workers", 2))
-            pool_util = round(min(100.0, max(0.0, (worker_cpu * 16.0) / max(1, workers))), 1)
+            w_cpu = float(telem.get("worker_cpu_percent", 0.0))
+            w_cnt = int(telem.get("active_workers", 2))
+            worker_cpu_active = compute_worker_cpu_active(w_cpu, w_cnt, 16)
+            whole_cpu = float(telem.get("cpu_percent", 0.0))
+
+        snapshot["worker_cpu_pct_active"] = worker_cpu_active
+        snapshot["whole_machine_cpu"] = whole_cpu
+        snapshot["slo_latency_ms"] = 300.0
+
+        pool_util = ctrl_state.get("smoothed_util")
+        if pool_util is None:
+            pool_util = worker_cpu_active
         snapshot["pool_utilization"] = pool_util if pool_util is not None else 0.0
 
         return jsonify(snapshot)

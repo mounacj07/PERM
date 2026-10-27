@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}PERM — Forecast{% endblock %}
+
+{% block content %}
+<div class="page-note">
+  <span>📈</span>
+  <strong id="forecast-banner-text">ST-AGBDT trained offline; replay uses runs not used in training</strong>
+</div>
+<div id="forecast-container">
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Demand Forecast & Capacity Sizing</span>
+    </div>
+    <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+      Forecast module initializing...
+    </div>
+  </div>
+</div>
+{% endblock %}

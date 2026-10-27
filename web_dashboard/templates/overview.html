@@ -1,0 +1,211 @@
+{% extends "base.html" %}
+{% block title %}PERM — Overview{% endblock %}
+
+{% block content %}
+<!-- KPI Cards Row -->
+<div class="grid-kpi">
+  <div class="card card-kpi kpi-workers">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Active Workers</span>
+      <span class="card-tag mono">CAPACITY</span>
+    </div>
+    <div class="card-value num" id="val-workers" style="color: var(--color-purple);">2 / 8</div>
+    <div class="card-subtext" id="sub-workers">Base Capacity: 2 Workers</div>
+  </div>
+
+  <div class="card card-kpi kpi-arrivals">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Arrival Rate</span>
+      <span class="card-tag mono">DEMAND</span>
+    </div>
+    <div class="card-value num" id="val-arrivals" style="color: var(--color-primary);">-- req/s</div>
+    <div class="card-subtext" id="sub-arrivals">Window: 1-second sample</div>
+  </div>
+
+  <div class="card card-kpi kpi-latency">
+    <div class="card-header-sm">
+      <span class="card-title-sm">P95 Response Latency</span>
+      <span class="card-tag mono">SLO 300ms</span>
+    </div>
+    <div class="card-value num" id="val-p95" style="color: var(--color-success);">-- ms</div>
+    <div class="card-subtext" id="sub-p95">Avg: -- ms</div>
+  </div>
+
+  <div class="card card-kpi kpi-queue">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Queue Depth</span>
+      <span class="card-tag mono">CAP 20</span>
+    </div>
+    <div class="card-value num" id="val-queue" style="color: var(--color-warning);">0</div>
+    <div class="card-subtext" id="sub-queue">In-flight: 0 requests</div>
+  </div>
+
+  <div class="card card-kpi kpi-failures">
+    <div class="card-header-sm">
+      <span class="card-title-sm">Failed Requests</span>
+      <span class="card-tag mono">ERRORS</span>
+    </div>
+    <div class="card-value num" id="val-fails" style="color: var(--color-danger);">0</div>
+    <div class="card-subtext" id="sub-fails">HTTP 503 / Timeouts: 0</div>
+  </div>
+</div>
+
+<!-- Status and Sparklines Row -->
+<div class="grid-charts">
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Worker CPU Utilization Sparkline (Recent 60s)</span>
+      <span id="badge-cpu" class="status-badge status-badge-ok">NORMAL</span>
+    </div>
+    <div class="sparkline-wrapper">
+      <canvas id="chart-spark-cpu"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="chart-header">
+      <span class="chart-title-text">Response Latency Sparkline (Recent 60s)</span>
+      <span id="badge-lat" class="status-badge status-badge-ok">NORMAL</span>
+    </div>
+    <div class="sparkline-wrapper">
+      <canvas id="chart-spark-lat"></canvas>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let sparkCpuChart = null;
+let sparkLatChart = null;
+
+function initSparklines() {
+  const commonSparkOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    scales: {
+      x: { display: false },
+      y: { display: false }
+    },
+    plugins: {
+      legend: { display: false },
+      tooltip: { enabled: true }
+    },
+    elements: {
+      point: { radius: 0 }
+    }
+  };
+
+  const ctxCpu = document.getElementById('chart-spark-cpu').getContext('2d');
+  sparkCpuChart = new Chart(ctxCpu, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: '#38bdf8',
+        borderWidth: 2,
+        fill: true,
+        backgroundColor: 'rgba(56, 189, 248, 0.1)',
+        tension: 0.3
+      }]
+    },
+    options: { ...commonSparkOptions, scales: { y: { min: 0, max: 100 } } }
+  });
+
+  const ctxLat = document.getElementById('chart-spark-lat').getContext('2d');
+  sparkLatChart = new Chart(ctxLat, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        borderColor: '#10b981',
+        borderWidth: 2,
+        fill: true,
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        tension: 0.3
+      }]
+    },
+    options: commonSparkOptions
+  });
+}
+
+function onStateUpdate(data) {
+  const telem = data.telemetry_latest || {};
+  const history = data.telemetry_history || [];
+  const ctrlState = data.controller_state || {};
+
+  // 1. KPI cards
+  const workers = ctrlState.current_workers || telem.active_workers || 2;
+  document.getElementById('val-workers').innerText = `${workers} / 8`;
+
+  const arrivals = telem.arrivals_count !== undefined ? telem.arrivals_count.toFixed(1) : '0.0';
+  document.getElementById('val-arrivals').innerText = `${arrivals} req/s`;
+
+  const p95 = telem.p95_latency_ms !== undefined ? telem.p95_latency_ms.toFixed(1) : '--';
+  const avg = telem.avg_latency_ms !== undefined ? telem.avg_latency_ms.toFixed(1) : '--';
+  document.getElementById('val-p95').innerText = `${p95} ms`;
+  document.getElementById('sub-p95').innerText = `Avg: ${avg} ms`;
+
+  const queue = telem.queue_depth !== undefined ? telem.queue_depth : 0;
+  const inFlight = telem.in_flight !== undefined ? telem.in_flight : queue;
+  document.getElementById('val-queue').innerText = queue;
+  document.getElementById('sub-queue').innerText = `In-flight: ${inFlight} requests`;
+
+  const fails = telem.error_count !== undefined ? telem.error_count : 0;
+  document.getElementById('val-fails').innerText = fails;
+
+  // 2. Sparklines
+  if (history.length > 0) {
+    const labels = history.map(r => r.timestamp);
+    const cpuData = history.map(r => {
+      const wCpu = r.worker_cpu_percent !== undefined ? r.worker_cpu_percent : (r.cpu_percent || 0);
+      const w = r.active_workers || 2;
+      return Math.min(100.0, Math.max(0.0, (wCpu * 16.0) / Math.max(1, w)));
+    });
+    const latData = history.map(r => r.p95_latency_ms || r.avg_latency_ms || 0);
+
+    sparkCpuChart.data.labels = labels;
+    sparkCpuChart.data.datasets[0].data = cpuData;
+    sparkCpuChart.update('none');
+
+    sparkLatChart.data.labels = labels;
+    sparkLatChart.data.datasets[0].data = latData;
+    sparkLatChart.update('none');
+
+    // Status badges
+    const latestCpu = cpuData[cpuData.length - 1] || 0;
+    const badgeCpu = document.getElementById('badge-cpu');
+    if (latestCpu >= 85) {
+      badgeCpu.className = 'status-badge status-badge-crit';
+      badgeCpu.innerText = 'CRITICAL (≥85%)';
+    } else if (latestCpu >= 70) {
+      badgeCpu.className = 'status-badge status-badge-warn';
+      badgeCpu.innerText = 'WARNING (≥70%)';
+    } else {
+      badgeCpu.className = 'status-badge status-badge-ok';
+      badgeCpu.innerText = 'NORMAL';
+    }
+
+    const latestLat = latData[latData.length - 1] || 0;
+    const badgeLat = document.getElementById('badge-lat');
+    if (latestLat >= 300) {
+      badgeLat.className = 'status-badge status-badge-crit';
+      badgeLat.innerText = 'SLO BREACH';
+    } else if (latestLat >= 200) {
+      badgeLat.className = 'status-badge status-badge-warn';
+      badgeLat.innerText = 'WARNING';
+    } else {
+      badgeLat.className = 'status-badge status-badge-ok';
+      badgeLat.innerText = 'SLO COMPLIANT';
+    }
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  initSparklines();
+});
+</script>
+{% endblock %}
