@@ -9,11 +9,13 @@ Inference Service
 import argparse
 import json
 import logging
+import math
 import os
 import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 import joblib
 import numpy as np
@@ -375,7 +377,93 @@ def create_app(engine: InferenceEngine, collector_url: str):
             log.error("Model reload failed: %s", exc)
             return jsonify({"error": str(exc)}), 500
 
+    # Optional ST-AGBDT Demand Forecaster endpoint (enabled only via env PERM_FORECASTER=stagbdt)
+    if os.environ.get("PERM_FORECASTER", "").strip().lower() == "stagbdt":
+        stagbdt_engine = STAGBDTEngine(engine.model_dir)
+
+        @app.route("/forecast/demand", methods=["GET", "POST"])
+        def forecast_demand():
+            try:
+                payload = request.get_json(silent=True) or {}
+                horizon = request.args.get("horizon", default=payload.get("horizon", 20), type=int)
+                arrivals = payload.get("arrivals")
+                if arrivals is None:
+                    records = payload.get("records")
+                    if not records:
+                        try:
+                            resp = requests.get(f"{collector_url}/metrics/history?seconds=120", timeout=3.0)
+                            if resp.status_code == 200:
+                                records = resp.json().get("records", [])
+                        except Exception:
+                            pass
+                    if records:
+                        arrivals = [float(r.get("arrivals_count", 0.0)) for r in records]
+
+                if not arrivals:
+                    return jsonify({"error": "No arrival history available for prediction"}), 400
+
+                res = stagbdt_engine.predict_demand(arrivals, horizon=horizon)
+                return jsonify(res)
+            except Exception as exc:
+                log.error("Error in /forecast/demand: %s", exc)
+                return jsonify({"error": str(exc)}), 500
+
     return app
+
+
+class STAGBDTEngine:
+    """Helper engine for ST-AGBDT demand forecasting."""
+
+    def __init__(self, model_dir: str):
+        self.model_dir = model_dir
+        self.config: Dict[str, Any] = {}
+        self.models: Dict[int, Any] = {}
+        self.load()
+
+    def load(self):
+        cfg_path = os.path.join(self.model_dir, "stagbdt_final_config.json")
+        if not os.path.exists(cfg_path):
+            log.warning("ST-AGBDT config not found at %s", cfg_path)
+            return
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            self.config = json.load(f)
+
+        from stagbdt.model import STAGBDT
+        project_root = os.path.dirname(os.path.abspath(self.model_dir))
+        for h_key, rel_path in self.config.get("model_files", {}).items():
+            h = int(h_key.replace("h", ""))
+            full_path = os.path.join(project_root, rel_path)
+            if os.path.exists(full_path):
+                self.models[h] = STAGBDT.load_json(full_path)
+
+    def predict_demand(self, arrivals_list: List[float], horizon: int = 20) -> Dict[str, Any]:
+        if horizon not in self.models:
+            raise ValueError(f"Horizon h={horizon} not available. Available: {list(self.models.keys())}")
+        model = self.models[horizon]
+        from stagbdt.features import extract_features_single
+
+        arr = np.asarray(arrivals_list, dtype=np.float64)
+        if len(arr) == 0:
+            raise ValueError("Arrivals history cannot be empty")
+
+        feats = extract_features_single(arr)
+        raw_pred = float(model.predict_one(feats))
+        margin = float(self.config.get("conformal_margins", {}).get(f"h{horizon}", 0.0))
+        upper_bound = raw_pred + margin
+        eff_cap = float(self.config.get("effective_capacity_per_worker", 5.523))
+        rec_workers = int(np.clip(math.ceil(upper_bound / eff_cap), 2, 8))
+
+        return {
+            "forecaster": "stagbdt",
+            "horizon_sec": horizon,
+            "forecast": round(raw_pred, 3),
+            "conformal_margin": round(margin, 3),
+            "upper_bound": round(upper_bound, 3),
+            "recommended_workers": rec_workers,
+            "capacity_per_worker": float(self.config.get("capacity_per_worker", 7.89)),
+            "target_utilization": float(self.config.get("target_utilization", 0.70)),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
 
 
 def main():

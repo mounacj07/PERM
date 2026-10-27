@@ -108,7 +108,7 @@ All profiles use anchored stage boundaries (`stage_start_t`) to prevent inter-st
 
 ### Dataset Collection (`collect_dataset.py`)
 - Executed across all 6 profiles $\times$ 5 seeds (`[42, 43, 44, 45, 46]`) with capacity fixed at 8 workers.
-- At 8 workers, capacity is ~61.8 req/s, exceeding peak traffic (40 req/s). Zero requests are dropped or rejected; queue wait is negligible, exposing true uncontaminated demand signals.
+- At 8 workers, capacity is ~61.8 req/s, exceeding peak traffic (40 req/s). Zero requests are dropped or rejected; queue wait is negligible (though all 30 manifest runs are flagged contamination_warning due to 2.82-4.71 average non-worker CPU threads).
 - Runs saved to `data/runs/<profile>_seed<k>.csv` with run metadata and per-second telemetry.
 - Progress and metadata tracked in `data/manifest.json`.
 
@@ -200,7 +200,7 @@ test_testbed.py::TestFlaskClient::test_process_returns_processed PASSED  [100%]
 
 A strict automated grep of handoff files confirmed:
 - **`SUPERSEDED`**: 6 occurrences in `HANDOFF_STEP1.md`, 7 occurrences in `HANDOFF_STEP1b.md`.
-- **Absolute Paths (`C:\...`)**: **0** occurrences.
+- **Absolute Paths (``<root>`)**: **0** occurrences.
 - **File URI scheme links**: **0** occurrences.
 - **Usernames**: **0** occurrences.
 - **Data Provenance**: Every figure is generated directly from `step1_scaling_proof.csv`, `step1b_comparison.csv`, `rescored_step1b.json`, `step2_comparison.csv`, or `step2_summary.json`.

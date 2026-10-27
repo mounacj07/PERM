@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-25T14:12:03.993388+00:00",
+  "generated_at": "2026-10-25T15:15:55.635193+00:00",
   "target_capacity_workers": 8,
   "profiles": [
     "step",
@@ -17,7 +17,7 @@
     46
   ],
   "total_runs": 30,
-  "completed_runs": 2,
+  "completed_runs": 30,
   "runs": [
     {
       "run_id": "step_seed42",
@@ -28,6 +28,11 @@
       "rows_logged": 122,
       "total_arrivals": 2589,
       "total_ok": 2589,
+      "failed_requests": 0,
+      "max_queue_depth": 5,
+      "mean_nonworker_cpu_pct": 18.82,
+      "p95_nonworker_cpu_pct": 35.84,
+      "contamination_warning": true,
       "completed": true
     },
     {
@@ -36,8 +41,15 @@
       "seed": 43,
       "duration_sec": 120.0,
       "csv_file": "step_seed43.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 2701,
+      "total_ok": 2701,
+      "failed_requests": 0,
+      "max_queue_depth": 3,
+      "mean_nonworker_cpu_pct": 19.42,
+      "p95_nonworker_cpu_pct": 34.57,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "step_seed44",
@@ -45,8 +57,15 @@
       "seed": 44,
       "duration_sec": 120.0,
       "csv_file": "step_seed44.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 2663,
+      "total_ok": 2663,
+      "failed_requests": 0,
+      "max_queue_depth": 5,
+      "mean_nonworker_cpu_pct": 17.74,
+      "p95_nonworker_cpu_pct": 30.86,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "step_seed45",
@@ -54,8 +73,15 @@
       "seed": 45,
       "duration_sec": 120.0,
       "csv_file": "step_seed45.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 122,
+      "total_arrivals": 2619,
+      "total_ok": 2619,
+      "failed_requests": 0,
+      "max_queue_depth": 3,
+      "mean_nonworker_cpu_pct": 19.55,
+      "p95_nonworker_cpu_pct": 34.99,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "step_seed46",
@@ -63,8 +89,15 @@
       "seed": 46,
       "duration_sec": 120.0,
       "csv_file": "step_seed46.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 2654,
+      "total_ok": 2654,
+      "failed_requests": 0,
+      "max_queue_depth": 7,
+      "mean_nonworker_cpu_pct": 19.55,
+      "p95_nonworker_cpu_pct": 35.01,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "ramp_seed42",
@@ -72,8 +105,15 @@
       "seed": 42,
       "duration_sec": 135.0,
       "csv_file": "ramp_seed42.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 138,
+      "total_arrivals": 2650,
+      "total_ok": 2650,
+      "failed_requests": 0,
+      "max_queue_depth": 5,
+      "mean_nonworker_cpu_pct": 19.44,
+      "p95_nonworker_cpu_pct": 32.26,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "ramp_seed43",
@@ -81,8 +121,15 @@
       "seed": 43,
       "duration_sec": 135.0,
       "csv_file": "ramp_seed43.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 137,
+      "total_arrivals": 2764,
+      "total_ok": 2764,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 19.0,
+      "p95_nonworker_cpu_pct": 31.3,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "ramp_seed44",
@@ -90,8 +137,15 @@
       "seed": 44,
       "duration_sec": 135.0,
       "csv_file": "ramp_seed44.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 138,
+      "total_arrivals": 2756,
+      "total_ok": 2756,
+      "failed_requests": 0,
+      "max_queue_depth": 3,
+      "mean_nonworker_cpu_pct": 18.73,
+      "p95_nonworker_cpu_pct": 33.29,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "ramp_seed45",
@@ -99,8 +153,15 @@
       "seed": 45,
       "duration_sec": 135.0,
       "csv_file": "ramp_seed45.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 137,
+      "total_arrivals": 2670,
+      "total_ok": 2670,
+      "failed_requests": 0,
+      "max_queue_depth": 5,
+      "mean_nonworker_cpu_pct": 20.61,
+      "p95_nonworker_cpu_pct": 47.6,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "ramp_seed46",
@@ -108,8 +169,15 @@
       "seed": 46,
       "duration_sec": 135.0,
       "csv_file": "ramp_seed46.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 138,
+      "total_arrivals": 2720,
+      "total_ok": 2720,
+      "failed_requests": 0,
+      "max_queue_depth": 4,
+      "mean_nonworker_cpu_pct": 29.44,
+      "p95_nonworker_cpu_pct": 46.51,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "spike_seed42",
@@ -120,6 +188,11 @@
       "rows_logged": 77,
       "total_arrivals": 801,
       "total_ok": 801,
+      "failed_requests": 0,
+      "max_queue_depth": 2,
+      "mean_nonworker_cpu_pct": 21.63,
+      "p95_nonworker_cpu_pct": 40.04,
+      "contamination_warning": true,
       "completed": true
     },
     {
@@ -128,8 +201,15 @@
       "seed": 43,
       "duration_sec": 75.0,
       "csv_file": "spike_seed43.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 78,
+      "total_arrivals": 874,
+      "total_ok": 874,
+      "failed_requests": 0,
+      "max_queue_depth": 4,
+      "mean_nonworker_cpu_pct": 18.6,
+      "p95_nonworker_cpu_pct": 38.43,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "spike_seed44",
@@ -137,8 +217,15 @@
       "seed": 44,
       "duration_sec": 75.0,
       "csv_file": "spike_seed44.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 77,
+      "total_arrivals": 837,
+      "total_ok": 837,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 17.62,
+      "p95_nonworker_cpu_pct": 32.28,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "spike_seed45",
@@ -146,8 +233,15 @@
       "seed": 45,
       "duration_sec": 75.0,
       "csv_file": "spike_seed45.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 78,
+      "total_arrivals": 808,
+      "total_ok": 808,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 20.66,
+      "p95_nonworker_cpu_pct": 36.98,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "spike_seed46",
@@ -155,8 +249,15 @@
       "seed": 46,
       "duration_sec": 75.0,
       "csv_file": "spike_seed46.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 77,
+      "total_arrivals": 825,
+      "total_ok": 825,
+      "failed_requests": 0,
+      "max_queue_depth": 2,
+      "mean_nonworker_cpu_pct": 20.0,
+      "p95_nonworker_cpu_pct": 48.16,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "double_burst_seed42",
@@ -164,8 +265,15 @@
       "seed": 42,
       "duration_sec": 130.0,
       "csv_file": "double_burst_seed42.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 133,
+      "total_arrivals": 2608,
+      "total_ok": 2608,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 23.34,
+      "p95_nonworker_cpu_pct": 42.86,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "double_burst_seed43",
@@ -173,8 +281,15 @@
       "seed": 43,
       "duration_sec": 130.0,
       "csv_file": "double_burst_seed43.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 133,
+      "total_arrivals": 2712,
+      "total_ok": 2712,
+      "failed_requests": 0,
+      "max_queue_depth": 7,
+      "mean_nonworker_cpu_pct": 22.0,
+      "p95_nonworker_cpu_pct": 37.86,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "double_burst_seed44",
@@ -182,8 +297,15 @@
       "seed": 44,
       "duration_sec": 130.0,
       "csv_file": "double_burst_seed44.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 132,
+      "total_arrivals": 2711,
+      "total_ok": 2711,
+      "failed_requests": 0,
+      "max_queue_depth": 4,
+      "mean_nonworker_cpu_pct": 21.35,
+      "p95_nonworker_cpu_pct": 36.44,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "double_burst_seed45",
@@ -191,8 +313,15 @@
       "seed": 45,
       "duration_sec": 130.0,
       "csv_file": "double_burst_seed45.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 133,
+      "total_arrivals": 2606,
+      "total_ok": 2606,
+      "failed_requests": 0,
+      "max_queue_depth": 3,
+      "mean_nonworker_cpu_pct": 20.45,
+      "p95_nonworker_cpu_pct": 36.21,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "double_burst_seed46",
@@ -200,8 +329,15 @@
       "seed": 46,
       "duration_sec": 130.0,
       "csv_file": "double_burst_seed46.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 133,
+      "total_arrivals": 2673,
+      "total_ok": 2673,
+      "failed_requests": 0,
+      "max_queue_depth": 3,
+      "mean_nonworker_cpu_pct": 21.36,
+      "p95_nonworker_cpu_pct": 35.2,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "sawtooth_seed42",
@@ -209,8 +345,15 @@
       "seed": 42,
       "duration_sec": 120.0,
       "csv_file": "sawtooth_seed42.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 1866,
+      "total_ok": 1866,
+      "failed_requests": 0,
+      "max_queue_depth": 2,
+      "mean_nonworker_cpu_pct": 20.44,
+      "p95_nonworker_cpu_pct": 35.82,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "sawtooth_seed43",
@@ -218,8 +361,15 @@
       "seed": 43,
       "duration_sec": 120.0,
       "csv_file": "sawtooth_seed43.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 1972,
+      "total_ok": 1972,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 20.64,
+      "p95_nonworker_cpu_pct": 35.34,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "sawtooth_seed44",
@@ -227,8 +377,15 @@
       "seed": 44,
       "duration_sec": 120.0,
       "csv_file": "sawtooth_seed44.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 1909,
+      "total_ok": 1909,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 22.31,
+      "p95_nonworker_cpu_pct": 34.45,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "sawtooth_seed45",
@@ -236,8 +393,15 @@
       "seed": 45,
       "duration_sec": 120.0,
       "csv_file": "sawtooth_seed45.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 1914,
+      "total_ok": 1914,
+      "failed_requests": 0,
+      "max_queue_depth": 2,
+      "mean_nonworker_cpu_pct": 22.24,
+      "p95_nonworker_cpu_pct": 40.84,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "sawtooth_seed46",
@@ -245,8 +409,15 @@
       "seed": 46,
       "duration_sec": 120.0,
       "csv_file": "sawtooth_seed46.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 1926,
+      "total_ok": 1926,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 19.96,
+      "p95_nonworker_cpu_pct": 30.77,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "random_walk_seed42",
@@ -254,8 +425,15 @@
       "seed": 42,
       "duration_sec": 120.0,
       "csv_file": "random_walk_seed42.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 1359,
+      "total_ok": 1359,
+      "failed_requests": 0,
+      "max_queue_depth": 0,
+      "mean_nonworker_cpu_pct": 23.27,
+      "p95_nonworker_cpu_pct": 49.39,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "random_walk_seed43",
@@ -263,8 +441,15 @@
       "seed": 43,
       "duration_sec": 120.0,
       "csv_file": "random_walk_seed43.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 122,
+      "total_arrivals": 2952,
+      "total_ok": 2952,
+      "failed_requests": 0,
+      "max_queue_depth": 3,
+      "mean_nonworker_cpu_pct": 22.24,
+      "p95_nonworker_cpu_pct": 36.14,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "random_walk_seed44",
@@ -272,8 +457,15 @@
       "seed": 44,
       "duration_sec": 120.0,
       "csv_file": "random_walk_seed44.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 1789,
+      "total_ok": 1789,
+      "failed_requests": 0,
+      "max_queue_depth": 2,
+      "mean_nonworker_cpu_pct": 18.79,
+      "p95_nonworker_cpu_pct": 31.81,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "random_walk_seed45",
@@ -281,8 +473,15 @@
       "seed": 45,
       "duration_sec": 120.0,
       "csv_file": "random_walk_seed45.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 2061,
+      "total_ok": 2061,
+      "failed_requests": 0,
+      "max_queue_depth": 1,
+      "mean_nonworker_cpu_pct": 19.44,
+      "p95_nonworker_cpu_pct": 37.87,
+      "contamination_warning": true,
+      "completed": true
     },
     {
       "run_id": "random_walk_seed46",
@@ -290,8 +489,16 @@
       "seed": 46,
       "duration_sec": 120.0,
       "csv_file": "random_walk_seed46.csv",
-      "rows_logged": 0,
-      "completed": false
+      "rows_logged": 123,
+      "total_arrivals": 2573,
+      "total_ok": 2573,
+      "failed_requests": 0,
+      "max_queue_depth": 6,
+      "mean_nonworker_cpu_pct": 21.27,
+      "p95_nonworker_cpu_pct": 36.17,
+      "contamination_warning": true,
+      "completed": true
     }
-  ]
+  ],
+  "profile_definition_version": "v1.2"
 }

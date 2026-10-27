@@ -1,139 +1,981 @@
 {
-  "timestamp": "2026-10-25T13:56:07.491457+00:00",
-  "profiles": [
-    "spike"
-  ],
-  "modes": [
-    "reactive_capacity_aware"
-  ],
-  "repeats": 1,
-  "sensitivity_table": {
-    "98.0%": {
-      "reactive_capacity_aware": {
-        "passes": "0/1",
-        "avg_worker_seconds": 279.0,
-        "avg_success_rate": 96.13
-      }
+  "generated_at": "2026-10-25T21:50:00Z",
+  "description": "Step 2 Honest Scaling Summary with verified t_overload and lead times",
+  "profiles_status": {
+    "step": {
+      "status": "COMPLETE",
+      "completed_modes": [
+        "fixed_2",
+        "fixed_8",
+        "reactive",
+        "reactive_capacity_aware",
+        "perm"
+      ],
+      "repeats_per_mode": 3
     },
-    "99.0%": {
-      "reactive_capacity_aware": {
-        "passes": "0/1",
-        "avg_worker_seconds": 279.0,
-        "avg_success_rate": 96.13
-      }
+    "ramp": {
+      "status": "PARTIAL",
+      "completed_modes": [
+        "fixed_2 (3 reps)",
+        "fixed_8 (3 reps)",
+        "reactive (2 reps)"
+      ],
+      "missing_modes": [
+        "reactive_capacity_aware",
+        "perm"
+      ]
     },
-    "99.9%": {
-      "reactive_capacity_aware": {
-        "passes": "0/1",
-        "avg_worker_seconds": 279.0,
-        "avg_success_rate": 96.13
-      }
-    }
-  },
-  "summary_by_profile_and_mode": {
     "spike": {
-      "reactive_capacity_aware": {
-        "whole_run": {
-          "success_rate": {
-            "mean": 96.13,
-            "min": 96.13,
-            "max": 96.13
-          },
-          "failed_requests": {
-            "mean": 31.0,
-            "min": 31,
-            "max": 31
-          },
-          "worker_seconds": {
-            "mean": 279.0,
-            "min": 279,
-            "max": 279
-          },
-          "cost_per_ok_request": {
-            "mean": 0.36,
-            "min": 0.36,
-            "max": 0.36
-          },
-          "slo_met_seconds_pct": {
-            "mean": 95.77,
-            "min": 95.77,
-            "max": 95.77
-          },
-          "slo_pass_count": 0
-        },
-        "burst_window": {
-          "success_rate": {
-            "mean": 96.13,
-            "min": 96.13,
-            "max": 96.13
-          },
-          "failed_requests": {
-            "mean": 31.0,
-            "min": 31,
-            "max": 31
-          },
-          "worker_seconds": {
-            "mean": 273.0,
-            "min": 273,
-            "max": 273
-          },
-          "cost_per_ok_request": {
-            "mean": 0.35,
-            "min": 0.35,
-            "max": 0.35
-          },
-          "slo_met_seconds_pct": {
-            "mean": 95.77,
-            "min": 95.77,
-            "max": 95.77
-          },
-          "slo_pass_count": 0
-        },
-        "time_to_first_scale_up": {
-          "mean": 1.54,
-          "min": 1.54,
-          "max": 1.54
-        },
-        "time_to_adequate_capacity": {
-          "mean": 3.57,
-          "min": 3.57,
-          "max": 3.57
-        }
-      }
+      "status": "NOT_STARTED",
+      "completed_modes": [],
+      "missing_modes": [
+        "fixed_2",
+        "fixed_8",
+        "reactive",
+        "reactive_capacity_aware",
+        "perm"
+      ]
     }
   },
-  "individual_runs": [
-    {
-      "run_id": "reactive_capacity_aware_spike_rep1_1792936479",
-      "mode": "reactive_capacity_aware",
-      "repeat": 1,
-      "seed": 42,
-      "profile": "spike",
-      "duration_sec": 77.42,
-      "time_to_first_scale_up": 1.54,
-      "time_to_adequate_capacity": 3.57,
-      "whole_run": {
-        "success_rate": 96.13,
-        "failed_requests": 31,
-        "slo_pass": false,
-        "worker_seconds": 279,
-        "cost_per_ok_request": 0.362,
-        "slo_met_seconds_pct": 95.77,
-        "total_arrivals": 801,
-        "total_ok": 770
-      },
-      "burst_window": {
-        "success_rate": 96.13,
-        "failed_requests": 31,
-        "slo_pass": false,
-        "worker_seconds": 273,
-        "cost_per_ok_request": 0.355,
-        "slo_met_seconds_pct": 95.77,
-        "total_arrivals": 801,
-        "total_ok": 770
-      },
-      "perm_scale_events": []
+  "step_profile_cost_comparison_slo_passing_only": {
+    "fixed_8": {
+      "avg_worker_seconds": 984.0,
+      "diff_vs_cheapest_passing_pct": 0.0
     }
-  ],
-  "perm_scale_up_alerts": []
+  },
+  "mode_summaries": {
+    "step::fixed_2": {
+      "profile": "step",
+      "mode": "fixed_2",
+      "completed_repeats": 3,
+      "is_complete": true,
+      "slo_pass_count": "0/3",
+      "all_repeats_pass_slo": false,
+      "avg_success_rate_pct": 45.6,
+      "avg_worker_seconds": 247.3,
+      "avg_cost_per_ok": 0.2047,
+      "max_workers_observed": [
+        2,
+        2,
+        2
+      ],
+      "mean_lead_time_sec": "never/NA",
+      "runs": [
+        {
+          "run_id": "fixed_2_step_rep1_1792941403",
+          "mode": "fixed_2",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 121.74,
+          "total_arrivals": 2589,
+          "total_ok": 1211,
+          "failed_requests": 1378,
+          "rejected_count": 1378,
+          "timeout_count": 0,
+          "success_rate_pct": 46.77,
+          "slo_pass": false,
+          "max_workers": 2,
+          "worker_seconds": 246,
+          "cost_per_ok_request": 0.2031,
+          "t_overload_elapsed_sec": 31.94,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "never",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 98.28,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 7.73,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 23.73,
+            "flask_thread_equiv": 15.72,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 15.72,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_2_step_rep2_1792941535",
+          "mode": "fixed_2",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 122.45,
+          "total_arrivals": 2701,
+          "total_ok": 1183,
+          "failed_requests": 1518,
+          "rejected_count": 1518,
+          "timeout_count": 0,
+          "success_rate_pct": 43.8,
+          "slo_pass": false,
+          "max_workers": 2,
+          "worker_seconds": 248,
+          "cost_per_ok_request": 0.2096,
+          "t_overload_elapsed_sec": 31.67,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "never",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 86.99,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 7.49,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 27.78,
+            "flask_thread_equiv": 13.92,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 13.92,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_2_step_rep3_1792941667",
+          "mode": "fixed_2",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 3,
+          "seed": 44,
+          "duration_sec": 122.01,
+          "total_arrivals": 2663,
+          "total_ok": 1231,
+          "failed_requests": 1432,
+          "rejected_count": 1432,
+          "timeout_count": 0,
+          "success_rate_pct": 46.23,
+          "slo_pass": false,
+          "max_workers": 2,
+          "worker_seconds": 248,
+          "cost_per_ok_request": 0.2015,
+          "t_overload_elapsed_sec": 32.16,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "never",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 79.88,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 7.79,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 33.25,
+            "flask_thread_equiv": 12.78,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 12.78,
+            "contamination_warning": true
+          }
+        }
+      ]
+    },
+    "step::fixed_8": {
+      "profile": "step",
+      "mode": "fixed_8",
+      "completed_repeats": 3,
+      "is_complete": true,
+      "slo_pass_count": "3/3",
+      "all_repeats_pass_slo": true,
+      "avg_success_rate_pct": 100.0,
+      "avg_worker_seconds": 984.0,
+      "avg_cost_per_ok": 0.3713,
+      "max_workers_observed": [
+        8,
+        8,
+        8
+      ],
+      "mean_lead_time_sec": "never/NA",
+      "runs": [
+        {
+          "run_id": "fixed_8_step_rep1_1792941800",
+          "mode": "fixed_8",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 121.74,
+          "total_arrivals": 2589,
+          "total_ok": 2589,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 984,
+          "cost_per_ok_request": 0.3801,
+          "t_overload_elapsed_sec": null,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "0.0",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 95.15,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 16.41,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 42.29,
+            "flask_thread_equiv": 15.22,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 15.22,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_8_step_rep2_1792941936",
+          "mode": "fixed_8",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 121.6,
+          "total_arrivals": 2701,
+          "total_ok": 2701,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 984,
+          "cost_per_ok_request": 0.3643,
+          "t_overload_elapsed_sec": null,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "0.0",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 104.04,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 17.06,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 42.64,
+            "flask_thread_equiv": 16.65,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 16.65,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_8_step_rep3_1792942073",
+          "mode": "fixed_8",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 3,
+          "seed": 44,
+          "duration_sec": 121.53,
+          "total_arrivals": 2663,
+          "total_ok": 2663,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 984,
+          "cost_per_ok_request": 0.3695,
+          "t_overload_elapsed_sec": null,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "0.0",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 99.72,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 16.38,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 43.3,
+            "flask_thread_equiv": 15.96,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 15.96,
+            "contamination_warning": true
+          }
+        }
+      ]
+    },
+    "step::reactive": {
+      "profile": "step",
+      "mode": "reactive",
+      "completed_repeats": 3,
+      "is_complete": true,
+      "slo_pass_count": "1/3",
+      "all_repeats_pass_slo": false,
+      "avg_success_rate_pct": 98.29,
+      "avg_worker_seconds": 739.3,
+      "avg_cost_per_ok": 0.2839,
+      "max_workers_observed": [
+        8,
+        8,
+        8
+      ],
+      "mean_lead_time_sec": -0.85,
+      "runs": [
+        {
+          "run_id": "reactive_step_rep1_1792942209",
+          "mode": "reactive",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 122.41,
+          "total_arrivals": 2589,
+          "total_ok": 2571,
+          "failed_requests": 18,
+          "rejected_count": 18,
+          "timeout_count": 0,
+          "success_rate_pct": 99.3,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 746,
+          "cost_per_ok_request": 0.2902,
+          "t_overload_elapsed_sec": 32.4,
+          "first_scaleup_elapsed_sec": 31.9,
+          "lead_time_sec": 0.5,
+          "time_to_adequate_capacity_sec": "33.43",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 99.0,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 15.87,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 41.87,
+            "flask_thread_equiv": 15.84,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 15.84,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "reactive_step_rep2_1792942341",
+          "mode": "reactive",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 121.5,
+          "total_arrivals": 2701,
+          "total_ok": 2646,
+          "failed_requests": 55,
+          "rejected_count": 55,
+          "timeout_count": 0,
+          "success_rate_pct": 97.96,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 736,
+          "cost_per_ok_request": 0.2782,
+          "t_overload_elapsed_sec": 31.64,
+          "first_scaleup_elapsed_sec": 32.66,
+          "lead_time_sec": -1.02,
+          "time_to_adequate_capacity_sec": "34.71",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 117.16,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 16.58,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 36.11,
+            "flask_thread_equiv": 18.75,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 18.75,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "reactive_step_rep3_1792942473",
+          "mode": "reactive",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 3,
+          "seed": 44,
+          "duration_sec": 122.21,
+          "total_arrivals": 2663,
+          "total_ok": 2599,
+          "failed_requests": 64,
+          "rejected_count": 64,
+          "timeout_count": 0,
+          "success_rate_pct": 97.6,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 736,
+          "cost_per_ok_request": 0.2832,
+          "t_overload_elapsed_sec": 31.45,
+          "first_scaleup_elapsed_sec": 33.49,
+          "lead_time_sec": -2.04,
+          "time_to_adequate_capacity_sec": "35.52",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 89.47,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 16.15,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 39.89,
+            "flask_thread_equiv": 14.32,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 14.32,
+            "contamination_warning": true
+          }
+        }
+      ]
+    },
+    "step::reactive_capacity_aware": {
+      "profile": "step",
+      "mode": "reactive_capacity_aware",
+      "completed_repeats": 3,
+      "is_complete": true,
+      "slo_pass_count": "0/3",
+      "all_repeats_pass_slo": false,
+      "avg_success_rate_pct": 98.53,
+      "avg_worker_seconds": 648.7,
+      "avg_cost_per_ok": 0.2484,
+      "max_workers_observed": [
+        8,
+        8,
+        8
+      ],
+      "mean_lead_time_sec": -1.7,
+      "runs": [
+        {
+          "run_id": "reactive_capacity_aware_step_rep1_1792942606",
+          "mode": "reactive_capacity_aware",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 122.45,
+          "total_arrivals": 2589,
+          "total_ok": 2559,
+          "failed_requests": 30,
+          "rejected_count": 30,
+          "timeout_count": 0,
+          "success_rate_pct": 98.84,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 646,
+          "cost_per_ok_request": 0.2524,
+          "t_overload_elapsed_sec": 31.55,
+          "first_scaleup_elapsed_sec": 33.59,
+          "lead_time_sec": -2.04,
+          "time_to_adequate_capacity_sec": "33.59",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 124.06,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 16.04,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 35.3,
+            "flask_thread_equiv": 19.85,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 19.85,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "reactive_capacity_aware_step_rep2_1792942738",
+          "mode": "reactive_capacity_aware",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 121.83,
+          "total_arrivals": 2701,
+          "total_ok": 2655,
+          "failed_requests": 46,
+          "rejected_count": 46,
+          "timeout_count": 0,
+          "success_rate_pct": 98.3,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 646,
+          "cost_per_ok_request": 0.2433,
+          "t_overload_elapsed_sec": 31.57,
+          "first_scaleup_elapsed_sec": 33.63,
+          "lead_time_sec": -2.06,
+          "time_to_adequate_capacity_sec": "33.63",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 124.12,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 16.71,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 36.97,
+            "flask_thread_equiv": 19.86,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 19.86,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "reactive_capacity_aware_step_rep3_1792942871",
+          "mode": "reactive_capacity_aware",
+          "perm_model_label": null,
+          "profile": "step",
+          "repeat": 3,
+          "seed": 44,
+          "duration_sec": 121.59,
+          "total_arrivals": 2663,
+          "total_ok": 2622,
+          "failed_requests": 41,
+          "rejected_count": 41,
+          "timeout_count": 0,
+          "success_rate_pct": 98.46,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 654,
+          "cost_per_ok_request": 0.2494,
+          "t_overload_elapsed_sec": 31.43,
+          "first_scaleup_elapsed_sec": 32.44,
+          "lead_time_sec": -1.01,
+          "time_to_adequate_capacity_sec": "34.48",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 110.04,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 16.45,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 37.26,
+            "flask_thread_equiv": 17.61,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 17.61,
+            "contamination_warning": true
+          }
+        }
+      ]
+    },
+    "step::perm": {
+      "profile": "step",
+      "mode": "perm",
+      "completed_repeats": 3,
+      "is_complete": true,
+      "slo_pass_count": "0/3",
+      "all_repeats_pass_slo": false,
+      "avg_success_rate_pct": 92.37,
+      "avg_worker_seconds": 708.7,
+      "avg_cost_per_ok": 0.2894,
+      "max_workers_observed": [
+        8,
+        8,
+        8
+      ],
+      "mean_lead_time_sec": -5.61,
+      "runs": [
+        {
+          "run_id": "perm_step_rep1_1792943003",
+          "mode": "perm",
+          "perm_model_label": "PERM v0 (old RF, synthetic-trained)",
+          "profile": "step",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 122.34,
+          "total_arrivals": 2589,
+          "total_ok": 2340,
+          "failed_requests": 249,
+          "rejected_count": 249,
+          "timeout_count": 0,
+          "success_rate_pct": 90.38,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 688,
+          "cost_per_ok_request": 0.294,
+          "t_overload_elapsed_sec": 32.35,
+          "first_scaleup_elapsed_sec": 41.01,
+          "lead_time_sec": -8.66,
+          "time_to_adequate_capacity_sec": "45.1",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 100.57,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 14.69,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 40.12,
+            "flask_thread_equiv": 16.09,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 16.09,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "perm_step_rep2_1792943148",
+          "mode": "perm",
+          "perm_model_label": "PERM v0 (old RF, synthetic-trained)",
+          "profile": "step",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 122.48,
+          "total_arrivals": 2701,
+          "total_ok": 2507,
+          "failed_requests": 194,
+          "rejected_count": 194,
+          "timeout_count": 0,
+          "success_rate_pct": 92.82,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 732,
+          "cost_per_ok_request": 0.292,
+          "t_overload_elapsed_sec": 31.74,
+          "first_scaleup_elapsed_sec": 35.81,
+          "lead_time_sec": -4.07,
+          "time_to_adequate_capacity_sec": "41.89",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 106.75,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 15.62,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 40.91,
+            "flask_thread_equiv": 17.08,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 17.08,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "perm_step_rep3_1792943292",
+          "mode": "perm",
+          "perm_model_label": "PERM v0 (old RF, synthetic-trained)",
+          "profile": "step",
+          "repeat": 3,
+          "seed": 44,
+          "duration_sec": 121.69,
+          "total_arrivals": 2663,
+          "total_ok": 2501,
+          "failed_requests": 162,
+          "rejected_count": 162,
+          "timeout_count": 0,
+          "success_rate_pct": 93.92,
+          "slo_pass": false,
+          "max_workers": 8,
+          "worker_seconds": 706,
+          "cost_per_ok_request": 0.2823,
+          "t_overload_elapsed_sec": 31.37,
+          "first_scaleup_elapsed_sec": 35.47,
+          "lead_time_sec": -4.1,
+          "time_to_adequate_capacity_sec": "40.61",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 100.83,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 15.7,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 41.77,
+            "flask_thread_equiv": 16.13,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 16.13,
+            "contamination_warning": true
+          }
+        }
+      ]
+    },
+    "ramp::fixed_2": {
+      "profile": "ramp",
+      "mode": "fixed_2",
+      "completed_repeats": 3,
+      "is_complete": true,
+      "slo_pass_count": "0/3",
+      "all_repeats_pass_slo": false,
+      "avg_success_rate_pct": 51.47,
+      "avg_worker_seconds": 276.7,
+      "avg_cost_per_ok": 0.1975,
+      "max_workers_observed": [
+        2,
+        2,
+        2
+      ],
+      "mean_lead_time_sec": "never/NA",
+      "runs": [
+        {
+          "run_id": "fixed_2_ramp_rep1_1792943437",
+          "mode": "fixed_2",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 137.54,
+          "total_arrivals": 2650,
+          "total_ok": 1382,
+          "failed_requests": 1268,
+          "rejected_count": 1268,
+          "timeout_count": 0,
+          "success_rate_pct": 52.15,
+          "slo_pass": false,
+          "max_workers": 2,
+          "worker_seconds": 278,
+          "cost_per_ok_request": 0.2012,
+          "t_overload_elapsed_sec": 42.84,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "never",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 107.6,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 7.77,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 27.17,
+            "flask_thread_equiv": 17.22,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 17.22,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_2_ramp_rep2_1792943584",
+          "mode": "fixed_2",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 137.47,
+          "total_arrivals": 2764,
+          "total_ok": 1380,
+          "failed_requests": 1384,
+          "rejected_count": 1384,
+          "timeout_count": 0,
+          "success_rate_pct": 49.93,
+          "slo_pass": false,
+          "max_workers": 2,
+          "worker_seconds": 276,
+          "cost_per_ok_request": 0.2,
+          "t_overload_elapsed_sec": 41.29,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "never",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 97.48,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 7.81,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 28.14,
+            "flask_thread_equiv": 15.6,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 15.6,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_2_ramp_rep3_1792943732",
+          "mode": "fixed_2",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 3,
+          "seed": 44,
+          "duration_sec": 136.7,
+          "total_arrivals": 2756,
+          "total_ok": 1442,
+          "failed_requests": 1314,
+          "rejected_count": 1314,
+          "timeout_count": 0,
+          "success_rate_pct": 52.32,
+          "slo_pass": false,
+          "max_workers": 2,
+          "worker_seconds": 276,
+          "cost_per_ok_request": 0.1914,
+          "t_overload_elapsed_sec": 38.76,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "never",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 92.28,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 8.19,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 27.59,
+            "flask_thread_equiv": 14.76,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 14.76,
+            "contamination_warning": true
+          }
+        }
+      ]
+    },
+    "ramp::fixed_8": {
+      "profile": "ramp",
+      "mode": "fixed_8",
+      "completed_repeats": 3,
+      "is_complete": true,
+      "slo_pass_count": "3/3",
+      "all_repeats_pass_slo": true,
+      "avg_success_rate_pct": 100.0,
+      "avg_worker_seconds": 1106.7,
+      "avg_cost_per_ok": 0.4065,
+      "max_workers_observed": [
+        8,
+        8,
+        8
+      ],
+      "mean_lead_time_sec": "never/NA",
+      "runs": [
+        {
+          "run_id": "fixed_8_ramp_rep1_1792943879",
+          "mode": "fixed_8",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 136.5,
+          "total_arrivals": 2650,
+          "total_ok": 2650,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 1104,
+          "cost_per_ok_request": 0.4166,
+          "t_overload_elapsed_sec": null,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "0.0",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 91.03,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 15.05,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 33.28,
+            "flask_thread_equiv": 14.56,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 14.56,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_8_ramp_rep2_1792944031",
+          "mode": "fixed_8",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 136.5,
+          "total_arrivals": 2764,
+          "total_ok": 2764,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 1104,
+          "cost_per_ok_request": 0.3994,
+          "t_overload_elapsed_sec": null,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "0.0",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 108.49,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 15.69,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 34.73,
+            "flask_thread_equiv": 17.36,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 17.36,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "fixed_8_ramp_rep3_1792944182",
+          "mode": "fixed_8",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 3,
+          "seed": 44,
+          "duration_sec": 137.09,
+          "total_arrivals": 2756,
+          "total_ok": 2756,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 1112,
+          "cost_per_ok_request": 0.4035,
+          "t_overload_elapsed_sec": null,
+          "first_scaleup_elapsed_sec": "never",
+          "lead_time_sec": "never",
+          "time_to_adequate_capacity_sec": "0.0",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 95.25,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 15.47,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 36.52,
+            "flask_thread_equiv": 15.24,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 15.24,
+            "contamination_warning": true
+          }
+        }
+      ]
+    },
+    "ramp::reactive": {
+      "profile": "ramp",
+      "mode": "reactive",
+      "completed_repeats": 2,
+      "is_complete": false,
+      "slo_pass_count": "2/2",
+      "all_repeats_pass_slo": true,
+      "avg_success_rate_pct": 100.0,
+      "avg_worker_seconds": 770.0,
+      "avg_cost_per_ok": 0.2846,
+      "max_workers_observed": [
+        8,
+        8
+      ],
+      "mean_lead_time_sec": 1.81,
+      "runs": [
+        {
+          "run_id": "reactive_ramp_rep1_1792944334",
+          "mode": "reactive",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 1,
+          "seed": 42,
+          "duration_sec": 136.55,
+          "total_arrivals": 2650,
+          "total_ok": 2650,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 766,
+          "cost_per_ok_request": 0.2891,
+          "t_overload_elapsed_sec": 42.9,
+          "first_scaleup_elapsed_sec": 44.94,
+          "lead_time_sec": -2.04,
+          "time_to_adequate_capacity_sec": "46.46",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 87.66,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 14.67,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 39.71,
+            "flask_thread_equiv": 14.03,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 14.03,
+            "contamination_warning": true
+          }
+        },
+        {
+          "run_id": "reactive_ramp_rep2_1792944483",
+          "mode": "reactive",
+          "perm_model_label": null,
+          "profile": "ramp",
+          "repeat": 2,
+          "seed": 43,
+          "duration_sec": 136.81,
+          "total_arrivals": 2764,
+          "total_ok": 2764,
+          "failed_requests": 0,
+          "rejected_count": 0,
+          "timeout_count": 0,
+          "success_rate_pct": 100.0,
+          "slo_pass": true,
+          "max_workers": 8,
+          "worker_seconds": 774,
+          "cost_per_ok_request": 0.28,
+          "t_overload_elapsed_sec": 46.61,
+          "first_scaleup_elapsed_sec": 40.94,
+          "lead_time_sec": 5.67,
+          "time_to_adequate_capacity_sec": "47.63",
+          "per_process_cpu": {
+            "flask_cpu_mean_pct": 101.45,
+            "loadgen_cpu_mean_pct": 0.0,
+            "workers_cpu_mean_pct": 15.29,
+            "other_cpu_mean_pct": 0.0,
+            "sys_cpu_mean_pct": 38.54,
+            "flask_thread_equiv": 16.23,
+            "loadgen_thread_equiv": 0.0,
+            "flask_plus_loadgen_thread_equiv": 16.23,
+            "contamination_warning": true
+          }
+        }
+      ]
+    }
+  }
 }

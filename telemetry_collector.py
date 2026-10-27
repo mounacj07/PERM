@@ -28,6 +28,10 @@ CONFIGURATION (env vars or defaults):
     REQUEST_TIMEOUT_SEC - per-request deadline in seconds (default 2.0)
     QUEUE_CAPACITY      - maximum bounded queue backlog (default 20)
     WORKER_CORE_IDS     - comma-separated core indices to pin workers to
+    PROVISION_DELAY_SEC - extra seconds a newly-spawned worker is unavailable
+                          after becoming OS-ready (simulates config/warm-up;
+                          default 0 = no extra delay). Records ready_time in
+                          scale_events.
 """
 
 from __future__ import annotations
@@ -71,6 +75,14 @@ REQUEST_TIMEOUT_SEC: float = float(os.environ.get("REQUEST_TIMEOUT_SEC", "2.0"))
 # Queue capacity: chosen so max queue wait < REQUEST_TIMEOUT_SEC at 2 workers
 # At 2 workers and load=7 (126ms service time), 20 items / (2 / 0.126) ~= 1.26s < 2.0s
 QUEUE_CAPACITY: int = int(os.environ.get("QUEUE_CAPACITY", "20"))
+
+# Extra unavailability time after OS-ready (provisioning simulation)
+PROVISION_DELAY_SEC: float = float(os.environ.get("PROVISION_DELAY_SEC", "0"))
+
+
+def _record_latency(val: float = 0.0) -> None:
+    """Backward compatibility helper for test suites."""
+    pass
 
 
 def get_physical_core_map() -> List[List[int]]:
@@ -503,9 +515,23 @@ class _PoolManager:
                 p.start()
                 new_handles.append(_WorkerHandle(wid, p, exit_ev, ready_ev, core_affinity=affinity))
 
-            # Wait for processes to become ready without holding self._lock
+            # Wait for processes to become OS-ready without holding self._lock
+            os_ready_time = time.monotonic()
             for wh in new_handles:
                 wh.ready_event.wait(timeout=10.0)
+            os_ready_dur = round(time.monotonic() - t0, 3)
+
+            # PROVISION_DELAY_SEC: hold workers unavailable for extra time
+            # (simulates configuration/warm-up after OS-ready)
+            if PROVISION_DELAY_SEC > 0.0:
+                log.info(
+                    "PROVISION_DELAY_SEC=%.1f: holding %d new worker(s) unavailable for %.1fs",
+                    PROVISION_DELAY_SEC, needed, PROVISION_DELAY_SEC,
+                )
+                time.sleep(PROVISION_DELAY_SEC)
+
+            # Mark workers ready and add to pool
+            for wh in new_handles:
                 wh.ready = True
                 wh.get_psutil()
 
@@ -522,11 +548,14 @@ class _PoolManager:
                 "from_workers": old_count,
                 "to_workers": new_total,
                 "duration_seconds": dur,
+                "os_ready_seconds": os_ready_dur,
+                "provision_delay_sec": PROVISION_DELAY_SEC,
+                "ready_time": datetime.now(timezone.utc).isoformat(),
             }
             self._scale_events.append(event)
             log.info(
-                "Scale-up complete: %d -> %d workers (cold start took %.3fs)",
-                old_count, new_total, dur,
+                "Scale-up complete: %d -> %d workers (os_ready=%.3fs, total=%.3fs, delay=%.1fs)",
+                old_count, new_total, os_ready_dur, dur, PROVISION_DELAY_SEC,
             )
 
     def _scale_down_sync(self, target_n: int) -> None:

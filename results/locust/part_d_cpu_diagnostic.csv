@@ -1,0 +1,121 @@
+second,elapsed_sec,system_cpu_pct,unattributed_cpu_pct,top1_name,top1_cpu,top2_name,top2_cpu,top3_name,top3_cpu
+1,1.0,14.4,7.86,python.exe (CPU_diagnostic_runner),2.37,ServiceHub.Power.exe,1.49,MsMpEng.exe (Windows_Defender),0.85
+2,2.61,18.0,0.79,locust.exe (traffic_dispatcher),5.45,python.exe (CPU_diagnostic_runner),2.33,MsMpEng.exe (Windows_Defender),1.9
+3,4.21,16.2,2.01,ServiceHub.Power.exe,3.12,python.exe (CPU_diagnostic_runner),2.33,servicehost.exe,1.29
+4,5.77,14.2,1.31,python.exe (CPU_diagnostic_runner),2.25,python.exe,1.49,python.exe,1.31
+5,7.35,14.5,0.0,python.exe (CPU_diagnostic_runner),2.49,MsMpEng.exe (Windows_Defender),1.62,bdssvc.exe,1.32
+6,9.05,17.2,5.0,ServiceHub.Power.exe,2.53,python.exe (CPU_diagnostic_runner),2.16,python.exe,0.88
+7,10.6,10.5,1.32,python.exe (CPU_diagnostic_runner),2.3,ServiceHub.Power.exe,2.26,python.exe,0.97
+8,12.21,7.2,0.0,python.exe (CPU_diagnostic_runner),2.31,python.exe,1.18,python.exe,0.99
+9,13.94,24.2,0.79,Antigravity IDE.exe,4.41,python.exe (CPU_diagnostic_runner),2.58,MsMpEng.exe (Windows_Defender),2.4
+10,15.51,11.2,0.15,python.exe (CPU_diagnostic_runner),2.28,ServiceHub.Power.exe,2.16,python.exe,0.98
+11,17.09,7.5,1.32,python.exe (CPU_diagnostic_runner),2.28,python.exe,0.49,python.exe,0.49
+12,18.67,14.8,1.94,python.exe (CPU_diagnostic_runner),2.31,MsMpEng.exe (Windows_Defender),1.99,python.exe,1.51
+13,20.23,11.2,0.0,ServiceHub.Power.exe,3.05,python.exe (CPU_diagnostic_runner),2.29,python.exe,0.99
+14,21.81,12.3,0.91,python.exe (CPU_diagnostic_runner),2.29,python.exe,1.1,ServiceHub.Power.exe,1.05
+15,23.41,13.2,2.57,python.exe (CPU_diagnostic_runner),2.32,servicehost.exe,1.15,bdssvc.exe,1.03
+16,24.97,11.1,0.0,python.exe (CPU_diagnostic_runner),2.27,ServiceHub.Power.exe,1.9,python.exe,1.49
+17,26.55,10.2,2.82,python.exe (CPU_diagnostic_runner),2.23,ServiceHub.Power.exe,2.11,python.exe,0.49
+18,28.14,6.7,0.0,python.exe (CPU_diagnostic_runner),2.38,python.exe,0.53,python.exe,0.46
+19,29.86,17.0,2.31,python.exe (CPU_diagnostic_runner),2.54,MsMpEng.exe (Windows_Defender),1.38,ServiceHub.Power.exe,1.21
+20,31.42,13.3,2.71,ServiceHub.Power.exe,2.73,python.exe (CPU_diagnostic_runner),2.34,python.exe,0.99
+21,33.01,7.1,0.0,python.exe (CPU_diagnostic_runner),2.28,python.exe,1.24,python.exe,0.99
+22,34.6,43.7,0.0,Antigravity IDE.exe,7.44,MsMpEng.exe (Windows_Defender),5.58,python.exe,3.94
+23,36.46,48.6,1.01,Antigravity IDE.exe,5.28,MsMpEng.exe (Windows_Defender),4.91,python.exe,3.86
+24,38.24,47.5,1.7,MsMpEng.exe (Windows_Defender),5.42,python.exe,3.99,python.exe,3.73
+25,40.03,48.7,4.06,MsMpEng.exe (Windows_Defender),5.72,python.exe,3.71,python.exe,3.6
+26,41.8,57.8,2.29,MsMpEng.exe (Windows_Defender),6.01,ServiceHub.Power.exe,4.49,python.exe,4.43
+27,43.5,50.9,0.0,MsMpEng.exe (Windows_Defender),5.45,python.exe,4.85,python.exe,4.79
+28,45.36,57.3,0.59,MsMpEng.exe (Windows_Defender),6.9,python.exe,3.9,python.exe,3.9
+29,47.13,58.9,4.49,MsMpEng.exe (Windows_Defender),6.08,python.exe,4.62,python.exe,4.47
+30,48.85,47.6,4.88,MsMpEng.exe (Windows_Defender),5.02,python.exe,3.95,python.exe,3.92
+31,50.54,46.4,0.81,MsMpEng.exe (Windows_Defender),6.27,python.exe,3.67,python.exe,3.48
+32,52.26,46.4,0.0,MsMpEng.exe (Windows_Defender),5.7,ServiceHub.Power.exe,4.54,python.exe,3.89
+33,53.96,46.2,0.96,MsMpEng.exe (Windows_Defender),5.23,python.exe,4.01,python.exe,3.99
+34,55.71,48.2,0.01,Antigravity IDE.exe,6.29,MsMpEng.exe (Windows_Defender),5.9,python.exe,3.58
+35,57.47,50.5,0.0,MsMpEng.exe (Windows_Defender),5.72,python.exe,4.54,python.exe,4.52
+36,59.3,56.7,7.56,MsMpEng.exe (Windows_Defender),5.87,python.exe,4.29,python.exe,4.19
+37,61.02,60.7,0.0,MsMpEng.exe (Windows_Defender),6.91,python.exe,5.19,python.exe,5.11
+38,62.87,59.5,2.42,MsMpEng.exe (Windows_Defender),6.17,python.exe,4.59,python.exe,4.56
+39,64.6,50.7,3.98,MsMpEng.exe (Windows_Defender),5.77,python.exe,4.24,python.exe,4.13
+40,66.31,57.4,1.88,MsMpEng.exe (Windows_Defender),6.24,python.exe,4.4,python.exe,4.38
+41,68.1,48.5,4.11,MsMpEng.exe (Windows_Defender),5.62,python.exe,3.83,python.exe,3.61
+42,69.8,45.8,0.0,MsMpEng.exe (Windows_Defender),5.49,python.exe,4.0,python.exe,3.98
+43,71.5,45.9,0.0,MsMpEng.exe (Windows_Defender),5.83,python.exe,3.97,python.exe,3.95
+44,73.46,55.9,3.76,MsMpEng.exe (Windows_Defender),5.48,python.exe,4.46,python.exe,4.31
+45,75.2,51.2,1.71,MsMpEng.exe (Windows_Defender),5.92,python.exe,4.05,python.exe,3.98
+46,76.94,56.6,8.43,Antigravity IDE.exe,6.93,MsMpEng.exe (Windows_Defender),5.92,python.exe,3.91
+47,78.6,41.6,0.0,MsMpEng.exe (Windows_Defender),5.02,python.exe,4.44,python.exe,4.35
+48,80.44,52.6,2.34,MsMpEng.exe (Windows_Defender),5.21,python.exe,4.33,python.exe,4.28
+49,82.36,57.2,8.21,MsMpEng.exe (Windows_Defender),6.79,python.exe,4.39,python.exe,3.89
+50,84.07,45.2,0.0,MsMpEng.exe (Windows_Defender),4.65,python.exe,4.01,python.exe,3.9
+51,85.86,53.1,4.16,MsMpEng.exe (Windows_Defender),5.12,python.exe,4.34,python.exe,4.32
+52,87.54,44.6,0.0,Antigravity IDE.exe,6.28,MsMpEng.exe (Windows_Defender),5.77,python.exe,4.38
+53,89.51,59.1,10.25,MsMpEng.exe (Windows_Defender),5.81,ServiceHub.Power.exe,4.15,python.exe,3.86
+54,91.26,53.7,0.0,MsMpEng.exe (Windows_Defender),6.01,python.exe,4.83,python.exe,4.77
+55,93.04,54.1,11.52,MsMpEng.exe (Windows_Defender),5.88,python.exe,4.53,python.exe,3.49
+56,94.78,20.7,4.51,ServiceHub.Power.exe,3.51,python.exe (CPU_diagnostic_runner),2.59,MsMpEng.exe (Windows_Defender),1.26
+57,96.45,17.4,4.56,python.exe (CPU_diagnostic_runner),2.23,python.exe,1.49,MsMpEng.exe (Windows_Defender),1.49
+58,98.01,7.5,0.0,python.exe (CPU_diagnostic_runner),2.65,bdssvc.exe,1.25,MsMpEng.exe (Windows_Defender),1.25
+59,99.73,16.9,5.8,ServiceHub.Power.exe,3.16,python.exe (CPU_diagnostic_runner),2.2,MsMpEng.exe (Windows_Defender),0.81
+60,101.29,7.4,0.91,python.exe (CPU_diagnostic_runner),2.25,ServiceHub.Power.exe,0.88,python.exe,0.5
+61,102.88,12.2,0.73,Antigravity IDE.exe,3.66,python.exe (CPU_diagnostic_runner),2.34,python.exe,1.48
+62,104.52,17.6,1.74,python.exe (CPU_diagnostic_runner),2.44,MsMpEng.exe (Windows_Defender),1.66,bdssvc.exe,1.19
+63,106.08,13.1,0.0,ServiceHub.Power.exe,4.31,python.exe (CPU_diagnostic_runner),2.26,python.exe,1.5
+64,107.64,11.9,1.89,python.exe (CPU_diagnostic_runner),2.24,python.exe,1.06,System (Kernel),0.81
+65,109.22,17.1,1.72,python.exe (CPU_diagnostic_runner),2.33,MsMpEng.exe (Windows_Defender),2.21,python.exe,1.06
+66,110.79,16.3,0.0,Antigravity IDE.exe,4.99,ServiceHub.Power.exe,3.12,python.exe (CPU_diagnostic_runner),2.21
+67,112.34,11.9,3.91,python.exe (CPU_diagnostic_runner),2.25,ServiceHub.Power.exe,1.01,MsMpEng.exe (Windows_Defender),0.69
+68,113.92,7.9,0.0,python.exe (CPU_diagnostic_runner),2.64,MsMpEng.exe (Windows_Defender),1.4,bdssvc.exe,1.07
+69,115.65,15.7,3.61,ServiceHub.Power.exe,2.36,python.exe (CPU_diagnostic_runner),2.24,python.exe,1.61
+70,117.22,14.6,2.32,python.exe (CPU_diagnostic_runner),2.28,ServiceHub.Power.exe,1.48,MsMpEng.exe (Windows_Defender),1.29
+71,118.79,6.8,0.0,python.exe (CPU_diagnostic_runner),2.23,python.exe,0.54,python.exe,0.47
+72,120.51,16.2,2.06,python.exe (CPU_diagnostic_runner),2.56,ServiceHub.Power.exe,1.97,MsMpEng.exe (Windows_Defender),1.74
+73,122.06,14.6,2.43,Antigravity IDE.exe,4.02,python.exe (CPU_diagnostic_runner),2.33,ServiceHub.Power.exe,2.28
+74,123.63,5.8,2.76,python.exe (CPU_diagnostic_runner),2.16,Antigravity IDE.exe,0.19,ServiceHub.Helper.exe,0.12
+75,125.19,11.7,2.26,python.exe (CPU_diagnostic_runner),2.19,bdssvc.exe,1.31,MsMpEng.exe (Windows_Defender),1.06
+76,126.76,8.4,0.0,ServiceHub.Power.exe,2.7,python.exe (CPU_diagnostic_runner),2.33,svchost.exe,2.11
+77,128.32,8.9,1.98,python.exe (CPU_diagnostic_runner),2.09,MemCompression,1.94,ServiceHub.Power.exe,1.52
+78,129.88,10.6,0.0,Antigravity IDE.exe,3.77,python.exe (CPU_diagnostic_runner),2.52,System (Kernel),2.17
+79,131.54,9.9,4.11,python.exe (CPU_diagnostic_runner),2.16,ServiceHub.Power.exe,1.58,Antigravity IDE.exe,0.26
+80,133.08,7.1,0.85,ServiceHub.Power.exe,2.27,python.exe (CPU_diagnostic_runner),2.24,Antigravity IDE.exe,0.49
+81,134.66,11.5,1.11,servicehost.exe,2.32,python.exe (CPU_diagnostic_runner),2.22,System (Kernel),0.68
+82,136.32,13.2,2.77,python.exe (CPU_diagnostic_runner),2.34,Antigravity IDE.exe,1.86,Antigravity IDE.exe,1.44
+83,137.86,8.7,1.28,ServiceHub.Power.exe,3.37,python.exe (CPU_diagnostic_runner),2.24,System (Kernel),0.38
+84,139.44,4.2,0.74,python.exe (CPU_diagnostic_runner),2.21,Antigravity IDE.exe,0.25,System (Kernel),0.19
+85,140.99,9.2,1.4,python.exe (CPU_diagnostic_runner),2.2,bdssvc.exe,1.14,MsMpEng.exe (Windows_Defender),0.88
+86,142.55,6.0,0.09,ServiceHub.Power.exe,2.27,python.exe (CPU_diagnostic_runner),2.2,Antigravity IDE.exe,0.32
+87,144.09,10.7,1.35,python.exe (CPU_diagnostic_runner),2.13,servicehost.exe,1.7,ServiceHub.Power.exe,1.64
+88,145.65,4.5,0.0,Antigravity IDE.exe,3.23,python.exe (CPU_diagnostic_runner),2.68,bdssvc.exe,0.92
+89,147.41,12.4,6.61,python.exe (CPU_diagnostic_runner),2.3,ServiceHub.Power.exe,0.79,Antigravity IDE.exe,0.44
+90,148.97,9.4,2.39,ServiceHub.Power.exe,3.07,python.exe (CPU_diagnostic_runner),2.25,servicehost.exe,0.38
+91,150.53,5.5,0.96,python.exe (CPU_diagnostic_runner),2.24,Antigravity IDE.exe,0.37,Antigravity IDE.exe,0.36
+92,152.15,14.6,2.47,python.exe (CPU_diagnostic_runner),2.36,servicehost.exe,1.33,bdssvc.exe,1.02
+93,153.72,8.0,0.71,ServiceHub.Power.exe,3.79,python.exe (CPU_diagnostic_runner),2.19,Antigravity IDE.exe,0.38
+94,155.27,3.8,0.49,python.exe (CPU_diagnostic_runner),2.31,Antigravity IDE.exe,0.38,Antigravity IDE.exe,0.25
+95,156.85,8.6,1.59,python.exe (CPU_diagnostic_runner),2.27,bdssvc.exe,0.86,emlproxy.exe,0.74
+96,158.43,8.1,0.0,ServiceHub.Power.exe,4.11,python.exe (CPU_diagnostic_runner),2.26,Antigravity IDE.exe,0.44
+97,159.97,4.9,1.24,python.exe (CPU_diagnostic_runner),2.22,Antigravity IDE.exe,0.25,Antigravity IDE.exe,0.25
+98,161.53,5.2,0.0,Antigravity IDE.exe,3.44,python.exe (CPU_diagnostic_runner),2.44,MsMpEng.exe (Windows_Defender),0.91
+99,163.3,15.2,9.57,python.exe (CPU_diagnostic_runner),2.37,Antigravity IDE.exe,0.44,System (Kernel),0.39
+100,164.85,9.9,1.33,ServiceHub.Power.exe,4.14,python.exe (CPU_diagnostic_runner),2.25,Antigravity IDE.exe,0.43
+101,166.43,4.8,0.32,python.exe (CPU_diagnostic_runner),2.34,services.exe,0.37,Antigravity IDE.exe,0.31
+102,168.09,9.9,1.07,python.exe (CPU_diagnostic_runner),2.41,bdssvc.exe,1.06,emlproxy.exe,0.71
+103,169.66,8.4,0.99,ServiceHub.Power.exe,4.08,python.exe (CPU_diagnostic_runner),2.21,Antigravity IDE.exe,0.32
+104,171.2,3.7,0.0,python.exe (CPU_diagnostic_runner),2.26,Antigravity IDE.exe,0.5,Antigravity IDE.exe,0.25
+105,172.76,10.1,2.45,python.exe (CPU_diagnostic_runner),2.13,bdssvc.exe,1.13,MsMpEng.exe (Windows_Defender),1.01
+106,174.32,6.7,0.0,ServiceHub.Power.exe,3.56,python.exe (CPU_diagnostic_runner),2.19,Antigravity IDE.exe,0.31
+107,175.87,7.2,2.17,python.exe (CPU_diagnostic_runner),2.17,servicehost.exe,0.74,ServiceHub.Power.exe,0.44
+108,177.45,6.4,0.0,python.exe (CPU_diagnostic_runner),2.64,MsMpEng.exe (Windows_Defender),1.26,bdssvc.exe,0.86
+109,179.15,12.3,4.8,ServiceHub.Power.exe,2.77,python.exe (CPU_diagnostic_runner),2.15,Antigravity IDE.exe,0.51
+110,180.7,7.1,1.07,python.exe (CPU_diagnostic_runner),2.26,ServiceHub.Power.exe,1.44,System (Kernel),0.57
+111,182.26,4.4,0.0,python.exe (CPU_diagnostic_runner),2.21,servicehost.exe,0.68,Antigravity IDE.exe,0.3
+112,183.9,14.1,3.32,Antigravity IDE.exe,3.19,python.exe (CPU_diagnostic_runner),2.41,bdssvc.exe,0.96
+113,185.47,7.8,0.0,ServiceHub.Power.exe,3.86,python.exe (CPU_diagnostic_runner),2.31,servicehost.exe,0.38
+114,187.02,8.4,1.89,python.exe (CPU_diagnostic_runner),2.19,servicehost.exe,1.38,System (Kernel),0.44
+115,188.6,9.4,2.99,python.exe (CPU_diagnostic_runner),2.31,bdssvc.exe,0.74,emlproxy.exe,0.74
+116,190.17,5.5,0.0,ServiceHub.Power.exe,2.64,python.exe (CPU_diagnostic_runner),2.14,Antigravity IDE.exe,0.26
+117,191.7,6.8,1.6,python.exe (CPU_diagnostic_runner),2.26,ServiceHub.Power.exe,1.26,Antigravity IDE.exe,0.44
+118,193.27,4.6,0.0,python.exe (CPU_diagnostic_runner),2.54,MsMpEng.exe (Windows_Defender),1.03,bdssvc.exe,0.69
+119,194.96,15.0,6.95,python.exe (CPU_diagnostic_runner),2.21,ServiceHub.Power.exe,1.88,servicehost.exe,1.01
+120,196.51,6.9,1.89,python.exe (CPU_diagnostic_runner),2.26,ServiceHub.Power.exe,2.01,System (Kernel),0.31

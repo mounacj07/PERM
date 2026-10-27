@@ -1,0 +1,798 @@
+{
+  "metadata": {
+    "git_commit": "86a5603231a12d210fab9e3d3cab193591c2beec",
+    "target_utilization": 0.7,
+    "capacity_per_worker": 7.89,
+    "effective_capacity_per_worker": 5.523,
+    "conformal_coverage": 0.9,
+    "bootstrap_resamples": 1000,
+    "training_run_ids": [
+      "double_burst_seed42",
+      "double_burst_seed43",
+      "ramp_seed42",
+      "ramp_seed43",
+      "random_mix_seed0",
+      "random_mix_seed1",
+      "random_mix_seed10",
+      "random_mix_seed11",
+      "random_mix_seed12",
+      "random_mix_seed13",
+      "random_mix_seed14",
+      "random_mix_seed2",
+      "random_mix_seed3",
+      "random_mix_seed4",
+      "random_mix_seed5",
+      "random_mix_seed6",
+      "random_mix_seed7",
+      "random_mix_seed8",
+      "random_mix_seed9",
+      "random_walk_seed42",
+      "random_walk_seed43",
+      "spike_seed42",
+      "spike_seed43",
+      "step_seed43"
+    ],
+    "calibration_run_ids": [
+      "random_mix_seed15",
+      "random_mix_seed16",
+      "random_mix_seed17",
+      "random_mix_seed18",
+      "random_mix_seed19",
+      "step_seed44",
+      "ramp_seed44"
+    ],
+    "test_run_ids": [
+      "random_mix_seed20",
+      "random_mix_seed21",
+      "random_mix_seed22",
+      "random_mix_seed23",
+      "random_mix_seed24",
+      "random_mix_seed25",
+      "random_mix_seed26",
+      "random_mix_seed27",
+      "random_mix_seed28",
+      "random_mix_seed29",
+      "spike_seed44",
+      "double_burst_seed44",
+      "random_walk_seed44"
+    ],
+    "excluded_run_ids": [
+      "sawtooth_seed42",
+      "sawtooth_seed43",
+      "sawtooth_seed44",
+      "step_seed42"
+    ],
+    "features": [
+      "arr_accel_10",
+      "arr_accel_30",
+      "arr_accel_5",
+      "arr_accel_60",
+      "arr_curr",
+      "arr_ewma_10",
+      "arr_ewma_30",
+      "arr_ewma_5",
+      "arr_ewma_60",
+      "arr_max_10",
+      "arr_max_30",
+      "arr_max_5",
+      "arr_max_60",
+      "arr_mean_10",
+      "arr_mean_30",
+      "arr_mean_5",
+      "arr_mean_60",
+      "arr_slope_10",
+      "arr_slope_30",
+      "arr_slope_5",
+      "arr_slope_60",
+      "arr_std_10",
+      "arr_std_30",
+      "arr_std_5",
+      "arr_std_60"
+    ],
+    "model_config": {
+      "n_estimators": 50,
+      "max_depth": 4,
+      "learning_rate": 0.1,
+      "alpha": 0.85,
+      "l2_reg": 1.0,
+      "min_child_hessian": 0.001,
+      "n_bins": 64,
+      "random_state": 42
+    }
+  },
+  "horizons": {
+    "h10": {
+      "stagbdt_conformal_margin": 3.4595,
+      "baseline_conformal_margins": {
+        "persistence_raw": 14.3333,
+        "persistence_smoothed": 13.3333,
+        "ewma_10": 15.2647,
+        "linear_trend": 26.5556
+      },
+      "models": {
+        "ST-AGBDT (raw alpha=0.85)": {
+          "point_metrics": {
+            "mae": 7.7958,
+            "rmse": 10.258,
+            "workers_needed_miss_pct": 9.8177,
+            "mean_extra_workers": 0.9432
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              6.7539,
+              8.997
+            ],
+            "miss_ci95": [
+              5.958,
+              13.7205
+            ],
+            "extra_ci95": [
+              0.6339,
+              1.2483
+            ]
+          }
+        },
+        "ST-AGBDT + Conformal 90%": {
+          "point_metrics": {
+            "mae": 10.223,
+            "rmse": 12.2154,
+            "workers_needed_miss_pct": 6.4516,
+            "mean_extra_workers": 1.3619
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              8.8707,
+              11.692
+            ],
+            "miss_ci95": [
+              3.2126,
+              9.9645
+            ],
+            "extra_ci95": [
+              0.9624,
+              1.7512
+            ]
+          }
+        },
+        "Persistence (raw) Padded": {
+          "point_metrics": {
+            "mae": 11.2087,
+            "rmse": 12.6717,
+            "workers_needed_miss_pct": 11.5007,
+            "mean_extra_workers": 1.1522
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              10.6583,
+              11.8813
+            ],
+            "miss_ci95": [
+              8.4942,
+              14.3072
+            ],
+            "extra_ci95": [
+              0.9183,
+              1.3611
+            ]
+          }
+        },
+        "Persistence (smoothed) Padded": {
+          "point_metrics": {
+            "mae": 10.3467,
+            "rmse": 11.6409,
+            "workers_needed_miss_pct": 12.6227,
+            "mean_extra_workers": 1.1059
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              9.6885,
+              11.1907
+            ],
+            "miss_ci95": [
+              9.3642,
+              15.6598
+            ],
+            "extra_ci95": [
+              0.8966,
+              1.2885
+            ]
+          }
+        },
+        "EWMA 10s Padded": {
+          "point_metrics": {
+            "mae": 10.8217,
+            "rmse": 12.4012,
+            "workers_needed_miss_pct": 11.1501,
+            "mean_extra_workers": 1.2244
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              9.8943,
+              11.9433
+            ],
+            "miss_ci95": [
+              8.1161,
+              14.3514
+            ],
+            "extra_ci95": [
+              0.9926,
+              1.4218
+            ]
+          }
+        },
+        "Linear Trend Padded": {
+          "point_metrics": {
+            "mae": 26.1238,
+            "rmse": 30.3685,
+            "workers_needed_miss_pct": 8.1346,
+            "mean_extra_workers": 1.9215
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              25.1314,
+              27.2167
+            ],
+            "miss_ci95": [
+              5.1985,
+              11.1826
+            ],
+            "extra_ci95": [
+              1.4509,
+              2.3643
+            ]
+          }
+        },
+        "Persistence (raw) Unpadded": {
+          "point_metrics": {
+            "mae": 7.7931,
+            "rmse": 11.9416,
+            "workers_needed_miss_pct": 49.3689,
+            "mean_extra_workers": 0.0575
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              6.8445,
+              8.8149
+            ],
+            "miss_ci95": [
+              44.6555,
+              53.5922
+            ],
+            "extra_ci95": [
+              0.044,
+              0.0701
+            ]
+          }
+        },
+        "Persistence (smoothed) Unpadded": {
+          "point_metrics": {
+            "mae": 7.3677,
+            "rmse": 11.7053,
+            "workers_needed_miss_pct": 48.3871,
+            "mean_extra_workers": 0.0442
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              6.4158,
+              8.3955
+            ],
+            "miss_ci95": [
+              43.5172,
+              52.8299
+            ],
+            "extra_ci95": [
+              0.0319,
+              0.0586
+            ]
+          }
+        },
+        "EWMA 10s Unpadded": {
+          "point_metrics": {
+            "mae": 8.6405,
+            "rmse": 12.3001,
+            "workers_needed_miss_pct": 55.9607,
+            "mean_extra_workers": 0.0806
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              7.4308,
+              10.0475
+            ],
+            "miss_ci95": [
+              51.3985,
+              60.2635
+            ],
+            "extra_ci95": [
+              0.0431,
+              0.1338
+            ]
+          }
+        },
+        "Linear Trend Unpadded": {
+          "point_metrics": {
+            "mae": 14.9934,
+            "rmse": 20.9145,
+            "workers_needed_miss_pct": 41.655,
+            "mean_extra_workers": 0.3534
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              12.4917,
+              17.739
+            ],
+            "miss_ci95": [
+              37.7807,
+              45.4381
+            ],
+            "extra_ci95": [
+              0.2632,
+              0.4298
+            ]
+          }
+        }
+      }
+    },
+    "h20": {
+      "stagbdt_conformal_margin": 5.0763,
+      "baseline_conformal_margins": {
+        "persistence_raw": 23.3333,
+        "persistence_smoothed": 23.3333,
+        "ewma_10": 24.2991,
+        "linear_trend": 47.3333
+      },
+      "models": {
+        "ST-AGBDT (raw alpha=0.85)": {
+          "point_metrics": {
+            "mae": 9.9304,
+            "rmse": 12.4406,
+            "workers_needed_miss_pct": 12.037,
+            "mean_extra_workers": 1.2585
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              8.1778,
+              11.9359
+            ],
+            "miss_ci95": [
+              7.0213,
+              17.606
+            ],
+            "extra_ci95": [
+              0.8045,
+              1.682
+            ]
+          }
+        },
+        "ST-AGBDT + Conformal 90%": {
+          "point_metrics": {
+            "mae": 13.2453,
+            "rmse": 15.5369,
+            "workers_needed_miss_pct": 5.4012,
+            "mean_extra_workers": 1.6397
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              10.913,
+              15.5622
+            ],
+            "miss_ci95": [
+              2.2078,
+              9.0723
+            ],
+            "extra_ci95": [
+              1.0957,
+              2.1544
+            ]
+          }
+        },
+        "Persistence (raw) Padded": {
+          "point_metrics": {
+            "mae": 15.3187,
+            "rmse": 17.0922,
+            "workers_needed_miss_pct": 11.1883,
+            "mean_extra_workers": 1.3596
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              14.3923,
+              16.2227
+            ],
+            "miss_ci95": [
+              6.8748,
+              16.5135
+            ],
+            "extra_ci95": [
+              0.9438,
+              1.7624
+            ]
+          }
+        },
+        "Persistence (smoothed) Padded": {
+          "point_metrics": {
+            "mae": 14.9416,
+            "rmse": 16.542,
+            "workers_needed_miss_pct": 10.2623,
+            "mean_extra_workers": 1.3943
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              13.9014,
+              15.9914
+            ],
+            "miss_ci95": [
+              5.7479,
+              16.1819
+            ],
+            "extra_ci95": [
+              0.9703,
+              1.8034
+            ]
+          }
+        },
+        "EWMA 10s Padded": {
+          "point_metrics": {
+            "mae": 14.3998,
+            "rmse": 16.1943,
+            "workers_needed_miss_pct": 7.6389,
+            "mean_extra_workers": 1.4622
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              13.0864,
+              15.6015
+            ],
+            "miss_ci95": [
+              2.7118,
+              13.8045
+            ],
+            "extra_ci95": [
+              1.019,
+              1.8768
+            ]
+          }
+        },
+        "Linear Trend Padded": {
+          "point_metrics": {
+            "mae": 46.2782,
+            "rmse": 55.2793,
+            "workers_needed_miss_pct": 5.787,
+            "mean_extra_workers": 1.8472
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              44.8539,
+              47.8675
+            ],
+            "miss_ci95": [
+              3.5027,
+              8.4572
+            ],
+            "extra_ci95": [
+              1.2209,
+              2.4526
+            ]
+          }
+        },
+        "Persistence (raw) Unpadded": {
+          "point_metrics": {
+            "mae": 12.0424,
+            "rmse": 16.5242,
+            "workers_needed_miss_pct": 66.6667,
+            "mean_extra_workers": 0.0293
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              10.5445,
+              13.8558
+            ],
+            "miss_ci95": [
+              62.2575,
+              70.8923
+            ],
+            "extra_ci95": [
+              0.0195,
+              0.0402
+            ]
+          }
+        },
+        "Persistence (smoothed) Unpadded": {
+          "point_metrics": {
+            "mae": 11.8701,
+            "rmse": 16.3401,
+            "workers_needed_miss_pct": 68.4414,
+            "mean_extra_workers": 0.0247
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              10.3839,
+              13.6733
+            ],
+            "miss_ci95": [
+              63.1216,
+              73.4344
+            ],
+            "extra_ci95": [
+              0.0097,
+              0.044
+            ]
+          }
+        },
+        "EWMA 10s Unpadded": {
+          "point_metrics": {
+            "mae": 13.0786,
+            "rmse": 16.74,
+            "workers_needed_miss_pct": 76.466,
+            "mean_extra_workers": 0.0417
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              11.2859,
+              15.3818
+            ],
+            "miss_ci95": [
+              71.4281,
+              81.5464
+            ],
+            "extra_ci95": [
+              0.0066,
+              0.089
+            ]
+          }
+        },
+        "Linear Trend Unpadded": {
+          "point_metrics": {
+            "mae": 27.2823,
+            "rmse": 36.4978,
+            "workers_needed_miss_pct": 50.6944,
+            "mean_extra_workers": 0.4606
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              22.8347,
+              32.1999
+            ],
+            "miss_ci95": [
+              47.2502,
+              53.6079
+            ],
+            "extra_ci95": [
+              0.3258,
+              0.5877
+            ]
+          }
+        }
+      }
+    },
+    "h30": {
+      "stagbdt_conformal_margin": 6.7019,
+      "baseline_conformal_margins": {
+        "persistence_raw": 37.3333,
+        "persistence_smoothed": 39.3333,
+        "ewma_10": 40.4961,
+        "linear_trend": 55.6667
+      },
+      "models": {
+        "ST-AGBDT (raw alpha=0.85)": {
+          "point_metrics": {
+            "mae": 11.3176,
+            "rmse": 13.6048,
+            "workers_needed_miss_pct": 6.175,
+            "mean_extra_workers": 1.3962
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              8.6467,
+              13.9963
+            ],
+            "miss_ci95": [
+              1.8847,
+              11.8513
+            ],
+            "extra_ci95": [
+              0.8694,
+              1.9147
+            ]
+          }
+        },
+        "ST-AGBDT + Conformal 90%": {
+          "point_metrics": {
+            "mae": 16.0561,
+            "rmse": 18.4727,
+            "workers_needed_miss_pct": 0.4288,
+            "mean_extra_workers": 1.5978
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              12.6347,
+              19.45
+            ],
+            "miss_ci95": [
+              0.0,
+              1.2112
+            ],
+            "extra_ci95": [
+              1.0301,
+              2.1907
+            ]
+          }
+        },
+        "Persistence (raw) Padded": {
+          "point_metrics": {
+            "mae": 23.1541,
+            "rmse": 25.6024,
+            "workers_needed_miss_pct": 0.7719,
+            "mean_extra_workers": 1.6381
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              21.205,
+              24.649
+            ],
+            "miss_ci95": [
+              0.0,
+              2.0226
+            ],
+            "extra_ci95": [
+              1.048,
+              2.2505
+            ]
+          }
+        },
+        "Persistence (smoothed) Padded": {
+          "point_metrics": {
+            "mae": 24.4408,
+            "rmse": 26.8676,
+            "workers_needed_miss_pct": 0.0,
+            "mean_extra_workers": 1.6492
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              22.0176,
+              26.231
+            ],
+            "miss_ci95": [
+              0.0,
+              0.0
+            ],
+            "extra_ci95": [
+              1.0497,
+              2.2646
+            ]
+          }
+        },
+        "EWMA 10s Padded": {
+          "point_metrics": {
+            "mae": 24.3221,
+            "rmse": 26.5815,
+            "workers_needed_miss_pct": 0.0,
+            "mean_extra_workers": 1.6492
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              21.4181,
+              26.4202
+            ],
+            "miss_ci95": [
+              0.0,
+              0.0
+            ],
+            "extra_ci95": [
+              1.0497,
+              2.2646
+            ]
+          }
+        },
+        "Linear Trend Padded": {
+          "point_metrics": {
+            "mae": 56.9202,
+            "rmse": 70.5916,
+            "workers_needed_miss_pct": 8.0617,
+            "mean_extra_workers": 1.5232
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              53.8763,
+              60.474
+            ],
+            "miss_ci95": [
+              6.1111,
+              10.4024
+            ],
+            "extra_ci95": [
+              0.9397,
+              2.1046
+            ]
+          }
+        },
+        "Persistence (raw) Unpadded": {
+          "point_metrics": {
+            "mae": 15.5915,
+            "rmse": 19.6272,
+            "workers_needed_miss_pct": 79.8456,
+            "mean_extra_workers": 0.0163
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              13.5442,
+              18.4119
+            ],
+            "miss_ci95": [
+              75.1348,
+              84.4603
+            ],
+            "extra_ci95": [
+              0.0097,
+              0.0237
+            ]
+          }
+        },
+        "Persistence (smoothed) Unpadded": {
+          "point_metrics": {
+            "mae": 15.5169,
+            "rmse": 19.4956,
+            "workers_needed_miss_pct": 81.9897,
+            "mean_extra_workers": 0.0146
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              13.4066,
+              18.3794
+            ],
+            "miss_ci95": [
+              75.6541,
+              87.7842
+            ],
+            "extra_ci95": [
+              0.0047,
+              0.028
+            ]
+          }
+        },
+        "EWMA 10s Unpadded": {
+          "point_metrics": {
+            "mae": 16.5656,
+            "rmse": 19.8463,
+            "workers_needed_miss_pct": 88.2504,
+            "mean_extra_workers": 0.018
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              14.2916,
+              19.7322
+            ],
+            "miss_ci95": [
+              82.2776,
+              93.2932
+            ],
+            "extra_ci95": [
+              0.0034,
+              0.0359
+            ]
+          }
+        },
+        "Linear Trend Unpadded": {
+          "point_metrics": {
+            "mae": 36.9534,
+            "rmse": 49.8768,
+            "workers_needed_miss_pct": 57.4614,
+            "mean_extra_workers": 0.4451
+          },
+          "bootstrap_ci95": {
+            "mae_ci95": [
+              31.075,
+              43.719
+            ],
+            "miss_ci95": [
+              54.2923,
+              60.7204
+            ],
+            "extra_ci95": [
+              0.2835,
+              0.5983
+            ]
+          }
+        }
+      }
+    }
+  }
+}

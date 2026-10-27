@@ -118,6 +118,48 @@ def generate_schedule(profile: str, seed: int) -> Tuple[List[float], float, floa
             stages.append((dur, cur_rate, next_rate, is_burst))
             cur_rate = next_rate
             rem_dur -= dur
+    elif profile == "random_mix":
+        # Part B: calm 10-40 s, then 2-4 segments each a random step or a ramp (5-40 s)
+        # to a peak of 12-52 req/s, hold 10-40 s, return to 3-6 req/s; total <= 150 s.
+        stages = []
+        initial_calm_rate = round(rng.uniform(3.0, 6.0), 1)
+        initial_calm_dur = round(rng.uniform(10.0, 40.0), 1)
+        stages.append((initial_calm_dur, initial_calm_rate, initial_calm_rate, False))
+
+        current_rate = initial_calm_rate
+        n_segments = rng.randint(2, 4)
+        is_first_burst = True
+
+        for seg_idx in range(n_segments):
+            used_dur = sum(d for d, _, _, _ in stages)
+            if used_dur >= 130.0:
+                break
+            max_avail = max(10.0, 150.0 - used_dur)
+            peak_rate = round(rng.uniform(12.0, 52.0), 1)
+            seg_type = rng.choice(["step", "ramp"])
+            rise_dur = round(rng.uniform(5.0, min(30.0, max(5.0, max_avail * 0.3))), 1)
+            hold_dur = round(rng.uniform(10.0, min(30.0, max(5.0, max_avail * 0.4))), 1)
+            return_dur = round(rng.uniform(5.0, min(15.0, max(5.0, max_avail * 0.3))), 1)
+            calm_rate = round(rng.uniform(3.0, 6.0), 1)
+
+            if seg_type == "step":
+                stages.append((rise_dur, peak_rate, peak_rate, is_first_burst))
+            else:
+                stages.append((rise_dur, current_rate, peak_rate, is_first_burst))
+            is_first_burst = False
+
+            stages.append((hold_dur, peak_rate, peak_rate, False))
+            stages.append((return_dur, peak_rate, calm_rate, False))
+            current_rate = calm_rate
+
+        total_d = sum(d for d, _, _, _ in stages)
+        if total_d > 150.0:
+            excess = total_d - 150.0
+            last_d, r1, r2, fb = stages[-1]
+            if last_d > excess:
+                stages[-1] = (round(last_d - excess, 1), r1, r2, fb)
+            else:
+                stages.pop()
     else:
         raise ValueError(f"Unknown profile: {profile}")
 

@@ -1,0 +1,137 @@
+{
+  "format_version": "1.0",
+  "name": "ST-AGBDT (expectile boosted trees + conformal bound)",
+  "description": "ST-AGBDT final model configuration for horizons 10s, 20s, 30s",
+  "git_commit": "86a5603231a12d210fab9e3d3cab193591c2beec",
+  "clean_tree": true,
+  "date_trained": "2026-10-27",
+  "target_utilization": 0.7,
+  "capacity_per_worker": 7.89,
+  "effective_capacity_per_worker": 5.523,
+  "conformal_coverage": 0.9,
+  "conformal_margins": {
+    "h10": 3.4595,
+    "h20": 5.0763,
+    "h30": 6.7019
+  },
+  "baseline_conformal_margins": {
+    "h10": {
+      "persistence_raw": 14.3333,
+      "persistence_smoothed": 13.3333,
+      "ewma_10": 15.2647,
+      "linear_trend": 26.5556
+    },
+    "h20": {
+      "persistence_raw": 23.3333,
+      "persistence_smoothed": 23.3333,
+      "ewma_10": 24.2991,
+      "linear_trend": 47.3333
+    },
+    "h30": {
+      "persistence_raw": 37.3333,
+      "persistence_smoothed": 39.3333,
+      "ewma_10": 40.4961,
+      "linear_trend": 55.6667
+    }
+  },
+  "hyperparameters": {
+    "n_estimators": 50,
+    "max_depth": 4,
+    "learning_rate": 0.1,
+    "alpha": 0.85,
+    "l2_reg": 1.0,
+    "min_child_hessian": 0.001,
+    "n_bins": 64,
+    "random_state": 42
+  },
+  "features": [
+    "arr_accel_10",
+    "arr_accel_30",
+    "arr_accel_5",
+    "arr_accel_60",
+    "arr_curr",
+    "arr_ewma_10",
+    "arr_ewma_30",
+    "arr_ewma_5",
+    "arr_ewma_60",
+    "arr_max_10",
+    "arr_max_30",
+    "arr_max_5",
+    "arr_max_60",
+    "arr_mean_10",
+    "arr_mean_30",
+    "arr_mean_5",
+    "arr_mean_60",
+    "arr_slope_10",
+    "arr_slope_30",
+    "arr_slope_5",
+    "arr_slope_60",
+    "arr_std_10",
+    "arr_std_30",
+    "arr_std_5",
+    "arr_std_60"
+  ],
+  "splits": {
+    "training_run_ids": [
+      "double_burst_seed42",
+      "double_burst_seed43",
+      "ramp_seed42",
+      "ramp_seed43",
+      "random_mix_seed0",
+      "random_mix_seed1",
+      "random_mix_seed10",
+      "random_mix_seed11",
+      "random_mix_seed12",
+      "random_mix_seed13",
+      "random_mix_seed14",
+      "random_mix_seed2",
+      "random_mix_seed3",
+      "random_mix_seed4",
+      "random_mix_seed5",
+      "random_mix_seed6",
+      "random_mix_seed7",
+      "random_mix_seed8",
+      "random_mix_seed9",
+      "random_walk_seed42",
+      "random_walk_seed43",
+      "spike_seed42",
+      "spike_seed43",
+      "step_seed43"
+    ],
+    "calibration_run_ids": [
+      "random_mix_seed15",
+      "random_mix_seed16",
+      "random_mix_seed17",
+      "random_mix_seed18",
+      "random_mix_seed19",
+      "step_seed44",
+      "ramp_seed44"
+    ],
+    "test_run_ids": [
+      "random_mix_seed20",
+      "random_mix_seed21",
+      "random_mix_seed22",
+      "random_mix_seed23",
+      "random_mix_seed24",
+      "random_mix_seed25",
+      "random_mix_seed26",
+      "random_mix_seed27",
+      "random_mix_seed28",
+      "random_mix_seed29",
+      "spike_seed44",
+      "double_burst_seed44",
+      "random_walk_seed44"
+    ],
+    "excluded_run_ids": [
+      "sawtooth_seed42",
+      "sawtooth_seed43",
+      "sawtooth_seed44",
+      "step_seed42"
+    ]
+  },
+  "model_files": {
+    "h10": "models/stagbdt_h10_lean.json",
+    "h20": "models/stagbdt_h20_lean.json",
+    "h30": "models/stagbdt_h30_lean.json"
+  }
+}

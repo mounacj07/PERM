@@ -42,8 +42,13 @@ models/*.pkl
 .DS_Store
 Thumbs.db
 
-# --- Logs ---
+# --- Logs and agent outputs ---
 *.log
+logs/
+.system_generated/
+scratch/
+brain/
+agent_output/
 server.log
 locust.log
 

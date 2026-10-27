@@ -32,12 +32,16 @@ import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timezone
+from collections import deque
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
 import requests
+import psutil
 
 import burst_test
+
+PERM_MODEL_LABEL = "PERM v0 (old RF, synthetic-trained)"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -81,6 +85,11 @@ CSV_ROW_FIELDS = [
     "worker_cpu_per_active_pct",
     "queue_wait_ms_avg",
     "cpu_freq_mhz",
+    # Part 0: per-process CPU breakdown (% of machine, 1 logical thread = 100%/logical_count)
+    "flask_cpu_pct",
+    "loadgen_cpu_pct",
+    "workers_cpu_pct",
+    "other_cpu_pct",
 ]
 
 
@@ -339,6 +348,29 @@ def score_segment(rows: List[Dict]) -> Dict:
     }
 
 
+def _compute_t_overload(rows: List[Dict]) -> Optional[float]:
+    """t_overload = first second where the 3s-smoothed arrival rate > 0.9 * active_workers * 7.9."""
+    window: deque = deque(maxlen=3)
+    for r in rows:
+        arr = float(r.get("arrivals_count", 0))
+        window.append(arr)
+        if len(window) < 3:
+            continue
+        smoothed = sum(window) / len(window)
+        workers = max(1, int(r.get("active_workers", 1)))
+        threshold = 0.9 * workers * 7.9
+        if smoothed > threshold:
+            return float(r.get("elapsed_sec", 0.0))
+    return None
+
+
+def _compute_lead_time(t_overload: Optional[float], first_scaleup: Optional[float]) -> Optional[float]:
+    """lead_time = t_overload - first scale-up time (positive = before)."""
+    if t_overload is not None and first_scaleup is not None:
+        return round(t_overload - first_scaleup, 2)
+    return None
+
+
 def run_single_experiment(
     mode: str,
     repeat_idx: int,
@@ -474,6 +506,63 @@ def run_single_experiment(
         poller = threading.Thread(target=_telemetry_poller, daemon=True)
         poller.start()
 
+        # Per-process CPU monitor: tracks Flask, load-gen and worker breakdown
+        _cpu_monitor_data: List[Dict] = []
+        _cpu_stop = threading.Event()
+        _flask_pid = os.getpid()
+        _flask_psutil: Optional[psutil.Process] = None
+        try:
+            _flask_psutil = psutil.Process(_flask_pid)
+            _flask_psutil.cpu_percent(interval=None)  # prime
+        except Exception:
+            _flask_psutil = None
+
+        # Discover load-generator thread-pool workers (Python subprocs of this pid)
+        _loadgen_pids: set = set()
+        _cpu_count = psutil.cpu_count(logical=True) or 1
+
+        def _cpu_monitor():
+            """Sample per-process CPU every 1s, accumulate for run summary."""
+            # Give psutil baseline tick time
+            time.sleep(1.0)
+            while not _cpu_stop.is_set():
+                snapshot = {}
+                # Flask (this process)
+                if _flask_psutil:
+                    try:
+                        snapshot["flask_cpu_pct"] = round(
+                            _flask_psutil.cpu_percent(interval=None) / _cpu_count, 3
+                        )
+                    except Exception:
+                        snapshot["flask_cpu_pct"] = 0.0
+                else:
+                    snapshot["flask_cpu_pct"] = 0.0
+
+                # Load generator subprocesses (children of this process that are
+                # ThreadPoolExecutor workers for burst_test)
+                try:
+                    children = _flask_psutil.children(recursive=True) if _flask_psutil else []
+                    loadgen_cpu = sum(
+                        p.cpu_percent(interval=None) for p in children
+                    ) / _cpu_count
+                    snapshot["loadgen_cpu_pct"] = round(loadgen_cpu, 3)
+                    _loadgen_pids.update(p.pid for p in children)
+                except Exception:
+                    snapshot["loadgen_cpu_pct"] = 0.0
+
+                # Workers: via /api/capacity if available
+                snapshot["workers_cpu_pct"] = 0.0  # will be filled from telemetry
+
+                # Other = total - flask - loadgen - workers
+                snapshot["total_cpu_pct"] = round(
+                    psutil.cpu_percent(interval=None) / 100.0, 3
+                )
+                _cpu_monitor_data.append(snapshot)
+                time.sleep(1.0)
+
+        _cpu_monitor_th = threading.Thread(target=_cpu_monitor, daemon=True)
+        _cpu_monitor_th.start()
+
         def _on_burst_start_cb(utc_dt: datetime, mono_t: float):
             burst_start_info["mono"] = mono_t
             burst_start_info["utc"] = utc_dt
@@ -490,7 +579,60 @@ def run_single_experiment(
 
         time.sleep(2.5)
         stop_sampler.set()
+        _cpu_stop.set()
         poller.join(timeout=3.0)
+        _cpu_monitor_th.join(timeout=3.0)
+
+        # Summarize per-process CPU
+        if _cpu_monitor_data:
+            flask_vals = [s.get("flask_cpu_pct", 0.0) for s in _cpu_monitor_data]
+            loadgen_vals = [s.get("loadgen_cpu_pct", 0.0) for s in _cpu_monitor_data]
+            flask_mean = round(sum(flask_vals) / len(flask_vals) * 100.0, 2)
+            loadgen_mean = round(sum(loadgen_vals) / len(loadgen_vals) * 100.0, 2)
+        else:
+            flask_mean = 0.0
+            loadgen_mean = 0.0
+
+        # Worker CPU from collected telemetry rows
+        wk_pcts = [float(r.get("worker_cpu_percent", 0.0)) for r in collected_rows if r.get("worker_cpu_percent")]
+        workers_mean_pct = round(sum(wk_pcts) / len(wk_pcts), 2) if wk_pcts else 0.0
+        cpu_pcts = [float(r.get("cpu_percent", 0.0)) for r in collected_rows if r.get("cpu_percent")]
+        sys_mean_pct = round(sum(cpu_pcts) / len(cpu_pcts), 2) if cpu_pcts else 0.0
+        other_pct = round(max(0.0, sys_mean_pct - workers_mean_pct - flask_mean - loadgen_mean), 2)
+
+        # Annotate each collected row with per-process CPU from closest monitor snapshot
+        for i, row in enumerate(collected_rows):
+            snap_idx = min(i, len(_cpu_monitor_data) - 1) if _cpu_monitor_data else -1
+            if snap_idx >= 0:
+                snap = _cpu_monitor_data[snap_idx]
+                row["flask_cpu_pct"] = round(snap.get("flask_cpu_pct", 0.0) * 100.0, 2)
+                row["loadgen_cpu_pct"] = round(snap.get("loadgen_cpu_pct", 0.0) * 100.0, 2)
+                row["workers_cpu_pct"] = float(row.get("worker_cpu_percent", 0.0))
+                row["other_cpu_pct"] = round(
+                    max(0.0, float(row.get("cpu_percent", 0.0))
+                        - row["workers_cpu_pct"]
+                        - row["flask_cpu_pct"]
+                        - row["loadgen_cpu_pct"]), 2
+                )
+            else:
+                row["flask_cpu_pct"] = 0.0
+                row["loadgen_cpu_pct"] = 0.0
+                row["workers_cpu_pct"] = float(row.get("worker_cpu_percent", 0.0))
+                row["other_cpu_pct"] = 0.0
+
+        per_process_cpu = {
+            "flask_cpu_mean_pct": flask_mean,
+            "loadgen_cpu_mean_pct": loadgen_mean,
+            "workers_cpu_mean_pct": workers_mean_pct,
+            "other_cpu_mean_pct": other_pct,
+            "sys_cpu_mean_pct": sys_mean_pct,
+            "flask_plus_loadgen_thread_equiv": round(
+                (flask_mean + loadgen_mean) / (100.0 / max(1, _cpu_count)), 2
+            ) if _cpu_count > 0 else 0.0,
+            "contamination_warning": (
+                (flask_mean + loadgen_mean) > 10.0
+            ),
+        }
 
         scale_events = []
         try:
@@ -545,10 +687,10 @@ def run_single_experiment(
                 "is_before_burst": lead_time_sec > 0,
             })
 
-    # Scoring calculations (Part A)
-    # Burst window definition: burst_start to burst_end + 30s
+    # Pre-compute burst schedule (needed for burst_start_nominal used below)
     _, burst_start_nominal, total_dur_nominal = burst_test.generate_schedule(profile, seed)
-    # Nominal burst duration:
+
+    # Nominal burst duration
     if profile == "step":
         burst_dur = 60.0
     elif profile == "ramp":
@@ -557,6 +699,46 @@ def run_single_experiment(
         burst_dur = 15.0
     else:
         burst_dur = 60.0
+
+    # t_overload: 3s-smoothed arrival rate > 0.9 * active_workers * 7.9
+    # lead_time = t_overload - first_scale_up (in elapsed_sec of collected_rows).
+    # Scale-up time = request time (POST /api/capacity), NOT workers-ready time.
+    t_overload = _compute_t_overload(collected_rows)
+
+    # First scale-up elapsed_sec: from reactive scaler or scale_events
+    first_scaleup_elapsed: Optional[float] = None
+    if mode == "reactive" or mode == "reactive_capacity_aware":
+        if reactive_scaler and reactive_scaler.scale_events:
+            # Approximate elapsed_sec by mapping mono time to elapsed_sec
+            burst_mono_local = burst_start_info.get("mono")
+            if burst_mono_local and reactive_scaler.scale_events:
+                delta = reactive_scaler.scale_events[0]["time_mono"] - (t0_mono)
+                first_scaleup_elapsed = round(delta, 2)
+    elif mode == "perm":
+        scale_ups = [ev for ev in scale_events if ev.get("type") == "scale_up"]
+        if scale_ups and burst_start_info.get("utc"):
+            try:
+                # Map scale_up timestamp to elapsed_sec
+                first_ev_dt = datetime.fromisoformat(
+                    scale_ups[0]["timestamp"].replace("Z", "+00:00")
+                )
+                run_start_dt = burst_start_info["utc"] - timedelta(
+                    seconds=burst_start_nominal
+                )
+                first_scaleup_elapsed = round(
+                    (first_ev_dt - run_start_dt).total_seconds(), 2
+                )
+            except Exception:
+                pass
+
+    lead_time = _compute_lead_time(t_overload, first_scaleup_elapsed)
+
+    # Max workers seen during run
+    max_workers_seen = max(
+        (int(r.get("active_workers", 0)) for r in collected_rows), default=0
+    )
+
+    # Burst window definition: burst_start to burst_end + 30s
 
     burst_window_rows = [
         r for r in collected_rows
@@ -601,14 +783,25 @@ def run_single_experiment(
     run_summary = {
         "run_id": run_id,
         "mode": mode,
+        "perm_model": PERM_MODEL_LABEL if mode == "perm" else None,
         "repeat": repeat_idx,
         "seed": seed,
         "profile": profile,
         "duration_sec": collected_rows[-1]["elapsed_sec"] if collected_rows else 0.0,
+        "max_workers_seen": max_workers_seen,
+        "t_overload_elapsed_sec": t_overload,
+        "first_scaleup_elapsed_sec": first_scaleup_elapsed,
+        "lead_time_sec": lead_time,
+        "lead_time_note": (
+            "first_scaleup is request-time (POST /api/capacity), "
+            "not workers-ready time. workers-ready = "
+            "first_scaleup + cold_start_seconds from scale_events."
+        ),
         "time_to_first_scale_up": time_to_first_scale_up,
         "time_to_adequate_capacity": time_to_adequate_capacity,
         "whole_run": whole_run_score,
         "burst_window": burst_window_score,
+        "per_process_cpu": per_process_cpu,
         "perm_scale_events": perm_scale_events,
     }
 
