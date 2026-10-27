@@ -89,3 +89,66 @@ python collect_dataset.py --generator burst_test
 ```
 
 Outputs are stored in `data/runs_locust/` alongside an audit `manifest.json` detailing per-process CPU breakdown, rate fidelity, queue depths, and SLO compliance.
+
+---
+
+## Web Dashboard & Demo (Live & Replay)
+
+The PERM Web Dashboard is a dark-glassmorphism Flask interface running with plain JS and offline-vendored Chart.js (requiring no external CDN or heavy build tooling).
+
+### Dashboard Pages
+1. **Overview (`/` or `/overview`)**: Real-time KPI cards (active workers, arrival rate, p95 latency, queue depth, failed requests), CPU and latency sparklines, and edge status badge.
+2. **CPU Page (`/cpu`)**: Main pool gauge computing active worker busy percentage:
+   `Worker CPU = clip(worker_cpu_percent * 16 / active_workers, 0, 100)`
+   Includes whole-machine CPU, worker pool utilization, queue depth, and pool capacity thresholds (70% WARN, 85% CRITICAL).
+3. **Latency Page (`/latency`)**: Average and P95 latency tracking against the 300ms SLO threshold from `testbed_calibration.json`, alongside failed/rejected request rates.
+4. **Forecast Page (`/forecast`)**: Live and Replay modes:
+   - **Replay Mode**: Stream any recorded run from `data/runs_locust` at 1x, 5x, or 10x speed with demand, ST-AGBDT forecast, and 90% conformal upper bound, comparing recommended workers against actual demand requirements. Dynamic banner distinguishes held-out evaluation runs from offline training data.
+   - **Live Mode**: Live forecast tracking; displays a clean `"forecast service offline"` state if the inference service is down (never fakes data).
+5. **Alerts & Scaling (`/alerts` or `/scaling`)**: Controller alert events audit stream from `controller_events.csv`, worker count timeline, cold-start duration audit, and controller mode indicator (`PERM v0 (old model)` or `ST-AGBDT (final model)`).
+6. **Scenario Launcher (`/experiments`)**: Interactive trigger panel to launch headless Locust runs (`step`, `ramp`, `spike`, `double_burst`, `random_walk`, `random_mix`) with parameterized seeds and stop controls. Refuses concurrent runs.
+
+### How to Run
+
+#### Option 1: Standalone Offline Dashboard & Replay (No Background Services Needed)
+To run the dashboard completely offline and explore the Replay demo on recorded runs:
+```bash
+python web_dashboard/app.py --port 8000
+```
+Open your browser to `http://127.0.0.1:8000/forecast` and select any run (e.g., `random_mix_seed20`, `step_seed44`).
+
+#### Option 2: Live End-to-End System Demo
+To run the live edge testbed with active telemetry, predictive scaling controller, and live dashboard:
+
+1. **Start the Telemetry Collector & Edge Application (Port 5000)**:
+   ```bash
+   python telemetry_collector.py --port 5000
+   ```
+
+2. **Start the ST-AGBDT Inference Service (Port 5001)**:
+   ```bash
+   python inference_service.py --port 5001 --collector-url http://127.0.0.1:5000 --model models/stagbdt_h20_lean.json
+   ```
+
+3. **Start the Demo Controller (Standalone 1s Loop)**:
+   ```bash
+   # Reactive mode baseline:
+   python demo_controller.py --mode reactive --initial-workers 2
+
+   # Or Predictive mode (proactive 20s lead-time scaling):
+   python demo_controller.py --mode predictive --initial-workers 2
+   ```
+
+4. **Start the Web Dashboard (Port 8000)**:
+   ```bash
+   python web_dashboard/app.py --port 8000 --collector-url http://127.0.0.1:5000 --inference-url http://127.0.0.1:5001
+   ```
+   Open `http://127.0.0.1:8000/` in your browser.
+
+5. **Trigger Live Scenarios**:
+   Navigate to `http://127.0.0.1:8000/experiments` in the dashboard to launch a synthetic traffic profile (e.g. `step` seed 44), or launch via CLI:
+   ```bash
+   export PERM_PROFILE=step
+   export PERM_SEED=44
+   locust -f locustfile_perm.py --headless -u 1 -r 1 -t 125s --host http://127.0.0.1:5000
+   ```
